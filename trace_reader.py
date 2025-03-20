@@ -15,13 +15,13 @@ def read_from_file(path: str):
             
             if match:
                 row = {
-                    '#': int(match.group(1)),
-                    'thread': int(match.group(2)),
+                    '#': match.group(1),
+                    'thread':match.group(2),
                     'Action type': match.group(3).strip(),
                     'MO': match.group(4),
                     'Location': match.group(5),
                     'Value': match.group(6),
-                    'RF': int(match.group(7)) if match.group(7) else -1
+                    'RF': match.group(7) if match.group(7) else ''
                 }
                 row_list.append(row)
             else:
@@ -50,7 +50,7 @@ for ops in op_rels:
 
 # RF edges
 for i in range(len(data)):
-    if data['RF'][i] != -1:
+    if data['RF'][i] != '':
         print(f'RF: {data['RF'][i]} from {data['#'][i]}')
         G.add_edge(data['#'][i], data['RF'][i])
         edge_labels[data['#'][i], data['RF'][i]] = 'rf'
