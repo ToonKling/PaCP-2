@@ -90,7 +90,7 @@ for row in data.itertuples(index=False):
     mem_loc = row.Location
 
     # Each node has corresponding memory location
-    if mem_loc_node.__contains__(mem_loc):
+    if mem_loc in mem_loc_node:
         mem_loc_node.get(mem_loc).add(node_id)
     else:
         mem_loc_node[mem_loc] = set(node_id)
@@ -104,7 +104,7 @@ for row in data.itertuples(index=False):
             pass
 
     # Add po (hb) edges:
-    if last_seen_thread.__contains__(thread_number):
+    if thread_number in last_seen_thread:
         hb_edges.append((last_seen_thread.get(thread_number), node_id))
 
     last_seen_thread[thread_number] = node_id
@@ -119,10 +119,10 @@ for row in data.itertuples(index=False):
             rf_edges.append((node_id, node_to))  # Created an RF edge
 
             # Create an HB edge:
-            if not not_ordered_memory_locations.__contains__(node_id) and \
-                    not not_ordered_memory_locations.__contains__(node_to):
+            if node_id not in not_ordered_memory_locations and \
+                    node_to not in not_ordered_memory_locations:
                 hb_edges.append((node_to, node_id))
-            elif node_write.__contains__(node_to): # I think this already meets conditions for a data race.
+            elif node_to in node_write: # I think this already meets conditions for a data race.
                 print(f"DATA RACE between nodes {node_to} and {node_id}")
                 break
 
