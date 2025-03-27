@@ -1,6 +1,7 @@
-
 import regex as re
 import pandas as pd
+import networkx as nx
+import matplotlib.pyplot as plt
 
 def read_from_file(path: str):
     pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+((\d*))\s+\(([\d,\s]+)\)$'
@@ -27,40 +28,35 @@ def read_from_file(path: str):
     return pd.DataFrame(row_list)
 
 
-data = read_from_file('./trace.txt')
-#
-# for instr in data['#']:
-#     G.add_node(instr)
-#
-# edge_labels = {}
-#
-# # Operation order edges
-# op_rels = data.groupby('thread')['#'].apply(list)
-# for ops in op_rels:
-#     for op in range(len(ops)-1):
-#         print(f'OP: {ops[op]} to {ops[op+1]}')
-#         G.add_edge(ops[op], ops[op+1])
-#         edge_labels[(ops[op], ops[op+1])] = 'op'
-#
-# # RF edges
-# for i in range(len(data)):
-#     if data['RF'][i] != '':
-#         print(f'RF: {data['RF'][i]} from {data['#'][i]}')
-#         G.add_edge(data['#'][i], data['RF'][i])
-#         edge_labels[data['#'][i], data['RF'][i]] = 'rf'
-#
-# # Thread spawning edges, not sure if correct :o
-# for i in range(len(data)):
-#     if data['Action type'][i] == 'thread create':
-#         for j in range(i, len(data)):
-#             if data['Action type'][j] == 'thread start':
-#                 f = data['#'][i]
-#                 t = data['#'][j]
-#                 print(f'Thread spawn: {f} to {t}')
-#                 G.add_edge(f, t)
-#                 edge_labels[f, t] = 'asw'
-#                 break
-#
+def create_graph(to, fr):
+    G = nx.DiGraph()
+
+    edge_labels = {}
+
+    # rf edges
+    for (x, y) in rf_edges:
+        G.add_node(x)
+        G.add_node(y)
+        G.add_edge(x, y)
+        edge_labels[(x, y)] = 'rf'
+
+    for (x, y) in hb_edges:
+        G.add_node(x)
+        G.add_node(y)
+        G.add_edge(x, y)
+        edge_labels[(x, y)] = 'hb'
+
+    edge_labels[(to, fr)] += ', race'
+
+    # Giant mess with the types, oops
+    print(f'Nodes: {G.nodes(data=True)}')
+    pos = {i: [int(data['#'][int(i)]), int(data['thread'][int(i)])] for (i, _) in G.nodes(data=True)}
+    print(f'pos: {pos}')
+    nx.draw_networkx(G, pos)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    plt.show()
+
+data = read_from_file('./races_traces/mp2.txt')
 
 # Aleks code:
 node_to_thread_nr = dict()
@@ -124,6 +120,7 @@ for row in data.itertuples(index=False):
                 hb_edges.append((node_to, node_id))
             elif node_to in node_write: # I think this already meets conditions for a data race.
                 print(f"DATA RACE between nodes {node_to} and {node_id}")
+                create_graph(node_id, node_to)
                 break
 
         case 'atomic write':
