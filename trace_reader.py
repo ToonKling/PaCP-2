@@ -28,7 +28,7 @@ def read_from_file(path: str):
     return pd.DataFrame(row_list)
 
 
-def create_graph(to, fr):
+def create_graph(to = None, fr = None):
     G = nx.DiGraph()
 
     edge_labels = {}
@@ -37,22 +37,25 @@ def create_graph(to, fr):
     for (x, y) in rf_edges:
         G.add_node(x)
         G.add_node(y)
-        G.add_edge(x, y)
+        G.add_edge(x, y, color='black')
         edge_labels[(x, y)] = 'rf'
 
     for (x, y) in hb_edges:
         G.add_node(x)
         G.add_node(y)
-        G.add_edge(x, y)
+        G.add_edge(x, y, color='black')
         edge_labels[(x, y)] = 'hb'
 
-    edge_labels[(to, fr)] += ', race'
+    if to is not None and fr is not None:
+        G.remove_edge(to, fr)
+        G.add_edge(to, fr, color='red')
 
     # Giant mess with the types, oops
     print(f'Nodes: {G.nodes(data=True)}')
     pos = {i: [int(data['#'][int(i)]), int(data['thread'][int(i)])] for (i, _) in G.nodes(data=True)}
+    colors = [G[u][v]['color'] for u, v in G.edges]
     print(f'pos: {pos}')
-    nx.draw_networkx(G, pos)
+    nx.draw_networkx(G, pos, edge_color=colors)
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.show()
 
