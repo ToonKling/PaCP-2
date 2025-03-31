@@ -27,8 +27,8 @@ def read_from_file(path: str):
                 raise RuntimeError('unexpected line format')
     return pd.DataFrame(row_list)
 
-def get_pos(node_id: str) -> tuple[int, int]:
-    return (int(node_id), int(data[data['#'] == node_id]['thread'].iloc[0]))
+def get_pos(node_id: int) -> tuple[int, int]:
+    return (node_id, int(data[data['#'] == str(node_id)]['thread'].iloc[0]))
 
 
 def create_graph(to = None, fr = None):
@@ -48,6 +48,12 @@ def create_graph(to = None, fr = None):
         G.add_node(y)
         G.add_edge(x, y, color='black')
         edge_labels[(x, y)] = 'hb'
+
+    for (x, y) in swa_relation:
+        G.add_node(x)
+        G.add_node(y)
+        G.add_edge(x, y, color='black')
+        edge_labels[(x, y)] = 'swa'
 
     if to is not None and fr is not None:
         G.remove_edge(to, fr)
@@ -76,12 +82,12 @@ node_write = set()
 # po_edges: list[tuple[int, int]] = [] po_edges are always == hb edges. So whenever you want to add a po edge, just add it to HB
 rf_edges: list[tuple[int, int]] = []
 hb_edges: list[tuple[int, int]] = []
-start_join_create_nodes = set() # TODO handling
+swa_relation: list[tuple[int, int]] = []
 
 for row in data.itertuples(index=False):
     # print(row)
     # We identify node by its ID
-    node_id = row._0
+    node_id: int = int(row._0)
 
     # Each node has a thread number:
     thread_number = row.thread
@@ -95,7 +101,7 @@ for row in data.itertuples(index=False):
     if mem_loc in mem_loc_node:
         mem_loc_node.get(mem_loc).add(node_id)
     else:
-        mem_loc_node[mem_loc] = set(node_id)
+        mem_loc_node[mem_loc] = set(str(node_id))
 
     # memory ordering:
     mo = row.MO
@@ -112,12 +118,30 @@ for row in data.itertuples(index=False):
     last_seen_thread[thread_number] = node_id
 
     match instr:
-        case ('thread start' | 'thread create' | 'thread join' | 'thread finish'):
-            # TODO: Handle those cases. Figure out how to add HB edges here.
-            start_join_create_nodes.add(node_id)
+        case ('thread start'):
+            if node_id == 1:
+                pass # This is the starting node, we do nothing
+            elif data[data['#'] == str(node_id-1)]['Action type'].iloc[0] == 'thread create':
+                swa_relation.append((node_id - 1, node_id))
+            else:
+                # If this is not the starting node, and the starting thread was not created right before,
+                # then we atm have no reliable way of finding the swa relation. I hope this will never occur.
+                raise Exception('Could not find thread creation')
+
+        case ('thread join'): # Thread finished also get handled here, but is delayed till we find a thread join
+
+            # Idea: Search backwards for the thread finish in the correct thread
+            thread_joined = int(row.Value[2:]) # Assumption: data has a form like '0x3', then this is '3'
+            all_thread_finishes = data[data['Action type'] == 'thread finish']
+            thread_finish_on_right_thread = all_thread_finishes[all_thread_finishes['thread'] == str(thread_joined)]
+            thread_finish_node = int(thread_finish_on_right_thread['#'].iloc[-1])
+
+            swa_relation.append((thread_finish_node, node_id))
+
+            pass
         case 'atomic read':
             node_read.add(node_id)
-            node_to = row.RF
+            node_to = int(row.RF)
             rf_edges.append((node_id, node_to))  # Created an RF edge
 
             # Create an HB edge:
@@ -133,9 +157,9 @@ for row in data.itertuples(index=False):
             node_write.add(node_id)
 
             for enemy in mem_loc_node[mem_loc]:
-                if node_id == enemy:
+                if node_id == int(enemy):
                     continue
-                if node_to_thread_nr[enemy] == thread_number: # We only consider nodes in different threads
+                if node_to_thread_nr[int(enemy)] == thread_number: # We only consider nodes in different threads
                     continue
 
                 # TODO: If HB path does not exist, we have a data race.
