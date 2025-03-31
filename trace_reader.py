@@ -27,6 +27,9 @@ def read_from_file(path: str):
                 raise RuntimeError('unexpected line format')
     return pd.DataFrame(row_list)
 
+def get_pos(node_id: str) -> tuple[int, int]:
+    return (int(node_id), int(data[data['#'] == node_id]['thread'].iloc[0]))
+
 
 def create_graph(to = None, fr = None):
     G = nx.DiGraph()
@@ -52,7 +55,7 @@ def create_graph(to = None, fr = None):
 
     # Giant mess with the types, oops
     print(f'Nodes: {G.nodes(data=True)}')
-    pos = {i: [int(data['#'][int(i)]), int(data['thread'][int(i)])] for (i, _) in G.nodes(data=True)}
+    pos = {i: get_pos(i) for (i, _) in G.nodes(data=True)}
     colors = [G[u][v]['color'] for u, v in G.edges]
     print(f'pos: {pos}')
     nx.draw_networkx(G, pos, edge_color=colors)
