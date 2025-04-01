@@ -56,13 +56,16 @@ def create_graph(to = None, fr = None):
         G.add_edge(x, y, color='black')
         edge_labels[(x, y)] = 'swa'
 
+    # for (x, y) in sw_relation:
+        
+
     if to is not None and fr is not None:
         G.remove_edge(to, fr)
         G.add_edge(to, fr, color='red')
-
+    
     mapping = {'atomic write': 'red', 'atomic read': 'blue'}
     node_colors = [
-        data[data['#'] == str(n)]['Action type']
+        data[data['#'] == n]['Action type']
             .map(lambda x: mapping.get(x, "#1f78b4")) # Default color included
             .iloc[-1]
         for n
@@ -70,15 +73,15 @@ def create_graph(to = None, fr = None):
     ]
 
     # Giant mess with the types, oops
-    print(f'Nodes: {G.nodes(data=True)}')
+    # print(f'Nodes: {G.nodes(data=True)}')
     pos = {i: get_pos(i) for (i, _) in G.nodes(data=True)}
     colors = [G[u][v]['color'] for u, v in G.edges]
-    print(f'pos: {pos}')
+    # print(f'pos: {pos}')
     nx.draw_networkx(G, pos, edge_color=colors, node_color=node_colors[:len(pos)])
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.show()
-
-data = read_from_file('./races_traces/reorder1.txt')
+    
+data = read_from_file('./races_traces/simple1.txt')
 
 # Aleks code:
 node_to_thread_nr = dict()
@@ -141,17 +144,20 @@ for row in data.itertuples(index=False):
             pass
         case 'atomic read':
             node_read.add(node_id)
-            node_to = int(row.RF)
-            rf_edges.append((node_to, node_id))  # Created an RF edge
+            node_from = int(row.RF)
+            if node_from == 0: 
+                # reading from initial state -> skip the node
+                continue
+            rf_edges.append((node_from, node_id))  # Created an RF edge
             if row.MO == 'release' and mem_loc in latest_release_write.keys():
                 sw_relation.append((latest_release_write[mem_loc], node_id))
             # Create an HB edge:
             if node_id not in not_ordered_memory_locations and \
-                    node_to not in not_ordered_memory_locations:
-                hb_edges.append((node_to, node_id))
-            elif node_to in node_write: # I think this already meets conditions for a data race.
-                print(f"DATA RACE between nodes {node_to} and {node_id}")
-                create_graph(node_id, node_to)
+                    node_from not in not_ordered_memory_locations:
+                hb_edges.append((node_from, node_id))
+            elif node_from in node_write: # I think this already meets conditions for a data race.
+                print(f"DATA RACE between nodes {node_from} and {node_id}")
+                create_graph(node_id, node_from)
                 break
 
         case 'atomic write':
@@ -175,4 +181,3 @@ for row in data.itertuples(index=False):
 
         # That means we need to have following methods:
         # Find HB path between nodes based on HB.
-
