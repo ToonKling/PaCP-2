@@ -108,7 +108,7 @@ for row in data.itertuples(index=False):
         hb_edges.append((last_seen_thread.get(thread_number), node_id))
 
     last_seen_thread[thread_number] = node_id
-
+    
     match instr:
         case 'thread start':
             if node_id == 1:
@@ -133,9 +133,9 @@ for row in data.itertuples(index=False):
         case 'atomic read':
             node_read.add(node_id)
             node_to = int(row.RF)
-            rf_edges.append((node_id, node_to))  # Created an RF edge
+            rf_edges.append((node_to, node_id))  # Created an RF edge
             if row.MO == 'release' and mem_loc in latest_release_write.keys():
-                sw_relation.append((node_id, latest_release_write[mem_loc]))
+                sw_relation.append((latest_release_write[mem_loc], node_id))
             # Create an HB edge:
             if node_id not in not_ordered_memory_locations and \
                     node_to not in not_ordered_memory_locations:
@@ -157,11 +157,6 @@ for row in data.itertuples(index=False):
 
                 # TODO: If HB path does not exist, we have a data race.
                 # Maybe use a union-find struct for that? Hmmm
-        
-        case 'atomic read':
-            pass
-
-
         case _:
             pass
 
