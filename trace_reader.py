@@ -4,6 +4,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from collections import defaultdict
 
+
+
 def read_from_file(path: str):
     pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+((\d*))\s+\(([\d,\s]+)\)$'
     row_list = []
@@ -25,6 +27,7 @@ def read_from_file(path: str):
                 }
                 row_list.append(row)
             else:
+                print(line)
                 raise RuntimeError('unexpected line format')
     return pd.DataFrame(row_list)
 
@@ -65,23 +68,29 @@ def create_graph(to = None, fr = None):
     
     mapping = {'atomic write': 'red', 'atomic read': 'blue'}
     node_colors = [
-        data[data['#'] == n]['Action type']
-            .map(lambda x: mapping.get(x, "#1f78b4")) # Default color included
-            .iloc[-1]
-        for n
-        in G.nodes
+        mapping.get(data[data['#'] == n]['Action type'].iloc[-1], "#1f78b4")
+        if not data[data['#'] == n].empty else "#808080"  # Default gray for missing nodes
+        for n in G.nodes
     ]
 
     # Giant mess with the types, oops
     # print(f'Nodes: {G.nodes(data=True)}')
-    pos = {i: get_pos(i) for (i, _) in G.nodes(data=True)}
+    pos = {}
+    for i in G.nodes:
+        try:
+            pos[i] = get_pos(i)
+        except Exception as e:
+            pos[i] = (0, 0)
+
+
     colors = [G[u][v]['color'] for u, v in G.edges]
     # print(f'pos: {pos}')
     nx.draw_networkx(G, pos, edge_color=colors, node_color=node_colors[:len(pos)])
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-    plt.show()
+    plt.savefig("output.png")
+    # plt.show()
     
-data = read_from_file('./races_traces/simple1.txt')
+data = read_from_file('./races_traces/reorder_seq_cst1.txt')
 
 # Aleks code:
 node_to_thread_nr = dict()
@@ -98,10 +107,18 @@ rf_edges: list[tuple[int, int]] = []
 hb_edges: list[tuple[int, int]] = []
 swa_relation: list[tuple[int, int]] = []
 sw_relation: list[tuple[int, int]] = []
+
+# Add init node # How do we get it to have certain memory location?
+node_write.add(0)
+not_ordered_memory_locations.add(0)
+hb_edges.append((0, 1))
+
 for row in data.itertuples(index=False):
     # print(row)
     # We identify node by its ID
+
     node_id: int = int(row._0)
+
     # Each node has a thread number:
     thread_number = row.thread
     node_to_thread_nr[node_id] = thread_number
@@ -116,7 +133,9 @@ for row in data.itertuples(index=False):
         not_ordered_memory_locations.add(node_id)
         
     # Add po (hb) edges:
+
     if thread_number in last_seen_thread:
+        # print(last_seen_thread.get(thread_number))
         hb_edges.append((last_seen_thread.get(thread_number), node_id))
 
     last_seen_thread[thread_number] = node_id
@@ -145,9 +164,9 @@ for row in data.itertuples(index=False):
         case 'atomic read':
             node_read.add(node_id)
             node_from = int(row.RF)
-            if node_from == 0: 
-                # reading from initial state -> skip the node
-                continue
+            # if node_from == 0:
+            #     # reading from initial state -> skip the node
+            #     continue
             rf_edges.append((node_from, node_id))  # Created an RF edge
             if row.MO == 'release' and mem_loc in latest_release_write.keys():
                 sw_relation.append((latest_release_write[mem_loc], node_id))
@@ -157,8 +176,7 @@ for row in data.itertuples(index=False):
                 hb_edges.append((node_from, node_id))
             elif node_from in node_write: # I think this already meets conditions for a data race.
                 print(f"DATA RACE between nodes {node_from} and {node_id}")
-                create_graph(node_id, node_from)
-                break
+                # break
 
         case 'atomic write':
             node_write.add(node_id)
@@ -178,6 +196,6 @@ for row in data.itertuples(index=False):
         # TODO: If there is a write edge,
         #  we need to go through all nodes in that memory location and see if
         #  there is an HB path between them.
-
+    # create_graph()
         # That means we need to have following methods:
         # Find HB path between nodes based on HB.
