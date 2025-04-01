@@ -2,6 +2,7 @@ import regex as re
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 def read_from_file(path: str):
     pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+((\d*))\s+\(([\d,\s]+)\)$'
@@ -68,14 +69,14 @@ def create_graph(to = None, fr = None):
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.show()
 
-data = read_from_file('./races_traces/mp2.txt')
+data = read_from_file('./races_traces/mp.txt')
 
 # Aleks code:
 node_to_thread_nr = dict()
 last_seen_thread = dict()  # thread ID to last seen instruction ID
 thread_creator = []  # instruction creating a thread # TODO
 # node_mem_loc = dict()  # not used atm
-mem_loc_node: dict[int, set] = dict()
+mem_loc_node: dict[int, set] = defaultdict(set)
 not_ordered_memory_locations = set()  # relaxed or acquire
 node_read = set()
 node_write = set()
@@ -83,6 +84,7 @@ node_write = set()
 rf_edges: list[tuple[int, int]] = []
 hb_edges: list[tuple[int, int]] = []
 swa_relation: list[tuple[int, int]] = []
+sw_relation: list[tuple[int, int]] = []
 
 for row in data.itertuples(index=False):
     # print(row)
@@ -98,15 +100,11 @@ for row in data.itertuples(index=False):
     mem_loc = row.Location
 
     # Each node has corresponding memory location
-    if mem_loc in mem_loc_node:
-        mem_loc_node.get(mem_loc).add(node_id)
-    else:
-        mem_loc_node[mem_loc] = set(str(node_id))
+    mem_loc_node[mem_loc].add(node_id)
 
     # memory ordering:
-    mo = row.MO
-    match mo:
-        case ('relaxed' | 'acquire'):
+    match row.MO:
+        case ('relaxed'):
             not_ordered_memory_locations.add(node_id)
         case _ :
             pass
@@ -164,6 +162,10 @@ for row in data.itertuples(index=False):
 
                 # TODO: If HB path does not exist, we have a data race.
                 # Maybe use a union-find struct for that? Hmmm
+        
+        case 'atomic read':
+            pass
+
 
         case _:
             pass
