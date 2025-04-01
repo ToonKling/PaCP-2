@@ -69,7 +69,7 @@ def create_graph(to = None, fr = None):
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.show()
 
-data = read_from_file('./races_traces/mp.txt')
+data = read_from_file('./races_traces/reorder1.txt')
 
 # Aleks code:
 node_to_thread_nr = dict()
@@ -122,7 +122,7 @@ for row in data.itertuples(index=False):
         case 'thread join': # Thread finished also get handled here, but is delayed till we find a thread join
 
             # Idea: Search backwards for the thread finish in the correct thread
-            thread_joined = int(row.Value[2:]) # Assumption: data has a form like '0x3', then this is '3'
+            thread_joined = int(row.Value, 16) # Assumption: data has a form like '0x3', then this is '3'
             all_thread_finishes = data[data['Action type'] == 'thread finish']
             thread_finish_on_right_thread = all_thread_finishes[all_thread_finishes['thread'] == thread_joined]
             thread_finish_node = int(thread_finish_on_right_thread['#'].iloc[-1])
