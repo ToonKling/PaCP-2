@@ -75,6 +75,7 @@ data = read_from_file('./races_traces/mp.txt')
 node_to_thread_nr = dict()
 last_seen_thread = dict()  # thread ID to last seen instruction ID
 thread_creator = []  # instruction creating a thread # TODO
+latest_release_write: dict[str, int] = dict()
 # node_mem_loc = dict()  # not used atm
 mem_loc_node: dict[int, set] = defaultdict(set)
 not_ordered_memory_locations = set()  # relaxed or acquire
@@ -89,25 +90,19 @@ for row in data.itertuples(index=False):
     # print(row)
     # We identify node by its ID
     node_id: int = int(row._0)
-
     # Each node has a thread number:
     thread_number = row.thread
     node_to_thread_nr[node_id] = thread_number
-
     # Node has an instruction type: read, write, other
     instr = row._2;
     mem_loc = row.Location
-
     # Each node has corresponding memory location
     mem_loc_node[mem_loc].add(node_id)
 
     # memory ordering:
-    match row.MO:
-        case ('relaxed'):
-            not_ordered_memory_locations.add(node_id)
-        case _ :
-            pass
-
+    if row.MO == 'relaxed':
+        not_ordered_memory_locations.add(node_id)
+        
     # Add po (hb) edges:
     if thread_number in last_seen_thread:
         hb_edges.append((last_seen_thread.get(thread_number), node_id))
@@ -115,7 +110,7 @@ for row in data.itertuples(index=False):
     last_seen_thread[thread_number] = node_id
 
     match instr:
-        case ('thread start'):
+        case 'thread start':
             if node_id == 1:
                 pass # This is the starting node, we do nothing
             elif data[data['#'] == node_id-1]['Action type'].iloc[0] == 'thread create':
@@ -124,8 +119,7 @@ for row in data.itertuples(index=False):
                 # If this is not the starting node, and the starting thread was not created right before,
                 # then we atm have no reliable way of finding the swa relation. I hope this will never occur.
                 raise Exception('Could not find thread creation')
-
-        case ('thread join'): # Thread finished also get handled here, but is delayed till we find a thread join
+        case 'thread join': # Thread finished also get handled here, but is delayed till we find a thread join
 
             # Idea: Search backwards for the thread finish in the correct thread
             thread_joined = int(row.Value[2:]) # Assumption: data has a form like '0x3', then this is '3'
@@ -140,7 +134,8 @@ for row in data.itertuples(index=False):
             node_read.add(node_id)
             node_to = int(row.RF)
             rf_edges.append((node_id, node_to))  # Created an RF edge
-
+            if row.MO == 'release' and mem_loc in latest_release_write.keys():
+                sw_relation.append((node_id, latest_release_write[mem_loc]))
             # Create an HB edge:
             if node_id not in not_ordered_memory_locations and \
                     node_to not in not_ordered_memory_locations:
@@ -153,7 +148,8 @@ for row in data.itertuples(index=False):
         case 'atomic write':
             node_write.add(node_id)
 
-
+            if row.MO == 'release':
+                latest_release_write[mem_loc] = thread_number
 
             for enemy in mem_loc_node[mem_loc]:
                 if node_id == int(enemy) or node_to_thread_nr[int(enemy)] == thread_number:
