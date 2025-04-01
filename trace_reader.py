@@ -31,6 +31,22 @@ def read_from_file(path: str):
                 raise RuntimeError('unexpected line format')
     return pd.DataFrame(row_list)
 
+# I don't claim this is efficient, I leave that to the algorithmics people ;)
+def path_exists(hb_edges: list[tuple[int, int]], from_node: int, to_node: int) -> bool:
+    lookup_table = defaultdict(set)
+    for u, v in hb_edges:
+        lookup_table[u].add(v)
+    visited = set()
+
+    def dfs(search_node: int):
+        if search_node == to_node:
+            return True
+        if search_node in visited:
+            return False
+        visited.add(search_node)
+        return any([dfs(neighbour) for neighbour in lookup_table[from_node]])
+    return dfs(from_node)
+
 def get_pos(node_id: int) -> tuple[int, int]:
     return (node_id, data[data['#'] == node_id]['thread'].iloc[0])
 
@@ -88,9 +104,9 @@ def create_graph(to = None, fr = None):
     nx.draw_networkx(G, pos, edge_color=colors, node_color=node_colors[:len(pos)])
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.savefig("output.png")
-    # plt.show()
-    
-data = read_from_file('./races_traces/reorder_seq_cst1.txt')
+    plt.show()
+
+data = read_from_file('./races_traces/double_write_no_race2.txt')
 
 # Aleks code:
 node_to_thread_nr = dict()
@@ -131,7 +147,7 @@ for row in data.itertuples(index=False):
     # memory ordering:
     if row.MO == 'relaxed':
         not_ordered_memory_locations.add(node_id)
-        
+
     # Add po (hb) edges:
 
     if thread_number in last_seen_thread:
@@ -139,7 +155,7 @@ for row in data.itertuples(index=False):
         hb_edges.append((last_seen_thread.get(thread_number), node_id))
 
     last_seen_thread[thread_number] = node_id
-    
+
     match instr:
         case 'thread start':
             if node_id == 1:
@@ -190,6 +206,19 @@ for row in data.itertuples(index=False):
 
                 # TODO: If HB path does not exist, we have a data race.
                 # Maybe use a union-find struct for that? Hmmm
+
+            # Find write-write data races
+            operations_before = data[data['#'] <= node_id]
+            access_same_loc = operations_before[operations_before['Location'] == mem_loc]
+            writes_same_loc = access_same_loc[access_same_loc['Action type'] == 'atomic write']
+            exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
+
+            for potential_race_id in exclude_self['#']:
+                if not path_exists(hb_edges, potential_race_id, node_id):
+                    print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
+                    print(f'Known HB relations: \n{hb_edges}')
+
+
         case _:
             pass
 
