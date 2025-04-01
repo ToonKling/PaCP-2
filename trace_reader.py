@@ -60,12 +60,21 @@ def create_graph(to = None, fr = None):
         G.remove_edge(to, fr)
         G.add_edge(to, fr, color='red')
 
+    mapping = {'atomic write': 'red', 'atomic read': 'blue'}
+    node_colors = [
+        data[data['#'] == str(n)]['Action type']
+            .map(lambda x: mapping.get(x, "#1f78b4")) # Default color included
+            .iloc[-1]
+        for n
+        in G.nodes
+    ]
+
     # Giant mess with the types, oops
     print(f'Nodes: {G.nodes(data=True)}')
     pos = {i: get_pos(i) for (i, _) in G.nodes(data=True)}
     colors = [G[u][v]['color'] for u, v in G.edges]
     print(f'pos: {pos}')
-    nx.draw_networkx(G, pos, edge_color=colors)
+    nx.draw_networkx(G, pos, edge_color=colors, node_color=node_colors[:len(pos)])
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.show()
 
