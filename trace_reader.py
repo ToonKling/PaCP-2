@@ -15,8 +15,8 @@ def read_from_file(path: str):
 
             if match:
                 row = {
-                    '#': match.group(1),
-                    'thread': match.group(2),
+                    '#': int(match.group(1)),
+                    'thread': int(match.group(2)),
                     'Action type': match.group(3).strip(),
                     'MO': match.group(4),
                     'Location': match.group(5),
@@ -29,7 +29,7 @@ def read_from_file(path: str):
     return pd.DataFrame(row_list)
 
 def get_pos(node_id: int) -> tuple[int, int]:
-    return (node_id, int(data[data['#'] == str(node_id)]['thread'].iloc[0]))
+    return (node_id, data[data['#'] == node_id]['thread'].iloc[0])
 
 
 def create_graph(to = None, fr = None):
@@ -85,7 +85,6 @@ rf_edges: list[tuple[int, int]] = []
 hb_edges: list[tuple[int, int]] = []
 swa_relation: list[tuple[int, int]] = []
 sw_relation: list[tuple[int, int]] = []
-
 for row in data.itertuples(index=False):
     # print(row)
     # We identify node by its ID
@@ -119,7 +118,7 @@ for row in data.itertuples(index=False):
         case ('thread start'):
             if node_id == 1:
                 pass # This is the starting node, we do nothing
-            elif data[data['#'] == str(node_id-1)]['Action type'].iloc[0] == 'thread create':
+            elif data[data['#'] == node_id-1]['Action type'].iloc[0] == 'thread create':
                 swa_relation.append((node_id - 1, node_id))
             else:
                 # If this is not the starting node, and the starting thread was not created right before,
@@ -131,7 +130,7 @@ for row in data.itertuples(index=False):
             # Idea: Search backwards for the thread finish in the correct thread
             thread_joined = int(row.Value[2:]) # Assumption: data has a form like '0x3', then this is '3'
             all_thread_finishes = data[data['Action type'] == 'thread finish']
-            thread_finish_on_right_thread = all_thread_finishes[all_thread_finishes['thread'] == str(thread_joined)]
+            thread_finish_on_right_thread = all_thread_finishes[all_thread_finishes['thread'] == thread_joined]
             thread_finish_node = int(thread_finish_on_right_thread['#'].iloc[-1])
 
             swa_relation.append((thread_finish_node, node_id))
@@ -154,11 +153,11 @@ for row in data.itertuples(index=False):
         case 'atomic write':
             node_write.add(node_id)
 
+
+
             for enemy in mem_loc_node[mem_loc]:
-                if node_id == int(enemy):
-                    continue
-                if node_to_thread_nr[int(enemy)] == thread_number: # We only consider nodes in different threads
-                    continue
+                if node_id == int(enemy) or node_to_thread_nr[int(enemy)] == thread_number:
+                    continue # We only consider nodes in different threads
 
                 # TODO: If HB path does not exist, we have a data race.
                 # Maybe use a union-find struct for that? Hmmm
