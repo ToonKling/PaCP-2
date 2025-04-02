@@ -212,7 +212,7 @@ for row in data.itertuples(index=False):
             # Find write-write data races
             operations_before = data[data['#'] <= node_id]
             access_same_loc = operations_before[operations_before['Location'] == mem_loc]
-            writes_same_loc = access_same_loc[access_same_loc['Action type'] == 'atomic write']
+            writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic read')]
             exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
 
             for potential_race_id in exclude_self['#']:
