@@ -26,5 +26,10 @@ class TestFindDataRace(unittest.TestCase):
         result = find_data_race('./races_traces/double_write_no_race2.txt')
         self.assertEqual(result, None)
 
+    # Program 2 from overleaf
+    def rel_acq_no_race(self):
+        result = find_data_race('./races_traces/rel_acq_no_race1.txt')
+        self.assertEqual(result, None)
+
 if __name__ == '__main__':
     unittest.main()
