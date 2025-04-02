@@ -51,7 +51,7 @@ def get_pos(data, node_id: int) -> tuple[int, int]:
     return (node_id, data[data['#'] == node_id]['thread'].iloc[0])
 
 
-def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None):
+def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, draw_graph: bool = False):
     G = nx.DiGraph()
 
     edge_labels = {}
@@ -99,9 +99,10 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None):
     nx.draw_networkx(G, pos, edge_color=colors, node_color=node_colors[:len(pos)])
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.savefig("output.png")
-    plt.show()
+    if draw_graph:
+        plt.show()
 
-def find_data_race(fileName: str = './races_traces/double_write_race1.txt') -> tuple[int, int] | None:
+def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw_graph: bool = False) -> tuple[int, int] | None:
     data = read_from_file(fileName)
 
     # Aleks code:
@@ -225,7 +226,7 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt') -> t
             # TODO: If there is a write edge,
             #  we need to go through all nodes in that memory location and see if
             #  there is an HB path between them.
-        create_graph(data=data, rf_edges=rf_edges, hb_edges=hb_edges, swa_relation=swa_relation)
+        create_graph(data=data, rf_edges=rf_edges, hb_edges=hb_edges, swa_relation=swa_relation, draw_graph=draw_graph)
             # That means we need to have following methods:
             # Find HB path between nodes based on HB.
     return None
