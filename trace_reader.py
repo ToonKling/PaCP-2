@@ -189,7 +189,7 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
                 if node_id not in not_ordered_memory_locations and \
                         node_from not in not_ordered_memory_locations:
                     hb_edges.append((node_from, node_id))
-                elif node_from in node_write: # I think this already meets conditions for a data race.
+                elif node_from in node_write and path_exists(hb_edges, node_from, node_id): # I think this already meets conditions for a data race.
                     print(f"DATA RACE between nodes {node_from} and {node_id}")
                     return (node_from, node_id)
                     # break
