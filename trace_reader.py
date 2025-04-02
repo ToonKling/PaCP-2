@@ -107,14 +107,9 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
 
     # Aleks code:
     last_seen_thread = dict()  # thread ID to last seen instruction ID
-    thread_creator = []  # instruction creating a thread # TODO
     latest_release_write: dict[str, int] = dict()
-    # node_mem_loc = dict()  # not used atm
-    mem_loc_node: dict[int, set] = defaultdict(set)
     not_ordered_memory_locations = set()  # relaxed or acquire
-    node_read = set()
     node_write = set()
-    # po_edges: list[tuple[int, int]] = [] po_edges are always == hb edges. So whenever you want to add a po edge, just add it to HB
     rf_edges: list[tuple[int, int]] = []
     hb_edges: list[tuple[int, int]] = []
     swa_relation: list[tuple[int, int]] = []
@@ -133,8 +128,6 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
         # Node has an instruction type: read, write, other
         instr = row._2;
         mem_loc = row.Location
-        # Each node has corresponding memory location
-        mem_loc_node[mem_loc].add(node_id)
 
         # memory ordering:
         if row.MO == 'relaxed':
@@ -171,7 +164,6 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
 
                 pass
             case 'atomic read':
-                node_read.add(node_id)
                 node_from = int(row.RF)
 
                 rf_edges.append((node_from, node_id))  # Created an RF edge
