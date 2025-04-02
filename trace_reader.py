@@ -106,7 +106,6 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
     data = read_from_file(fileName)
 
     # Aleks code:
-    node_to_thread_nr = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
     thread_creator = []  # instruction creating a thread # TODO
     latest_release_write: dict[str, int] = dict()
@@ -127,14 +126,10 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
     hb_edges.append((0, 1))
 
     for row in data.itertuples(index=False):
-        # print(row)
-        # We identify node by its ID
-
         node_id: int = int(row._0)
 
         # Each node has a thread number:
         thread_number = row.thread
-        node_to_thread_nr[node_id] = thread_number
         # Node has an instruction type: read, write, other
         instr = row._2;
         mem_loc = row.Location
@@ -148,7 +143,6 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
         # Add po (hb) edges:
 
         if thread_number in last_seen_thread:
-            # print(last_seen_thread.get(thread_number))
             hb_edges.append((last_seen_thread.get(thread_number), node_id))
 
         last_seen_thread[thread_number] = node_id
@@ -179,9 +173,7 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
             case 'atomic read':
                 node_read.add(node_id)
                 node_from = int(row.RF)
-                # if node_from == 0:
-                #     # reading from initial state -> skip the node
-                #     continue
+
                 rf_edges.append((node_from, node_id))  # Created an RF edge
                 if row.MO == 'release' and mem_loc in latest_release_write.keys():
                     sw_relation.append((latest_release_write[mem_loc], node_id))
@@ -200,13 +192,6 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
                 if row.MO == 'release':
                     latest_release_write[mem_loc] = thread_number
 
-                for enemy in mem_loc_node[mem_loc]:
-                    if node_id == int(enemy) or node_to_thread_nr[int(enemy)] == thread_number:
-                        continue # We only consider nodes in different threads
-
-                    # TODO: If HB path does not exist, we have a data race.
-                    # Maybe use a union-find struct for that? Hmmm
-
                 # Find write-write data races
                 operations_before = data[data['#'] <= node_id]
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
@@ -223,13 +208,8 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
             case _:
                 pass
 
-            # TODO: If there is a write edge,
-            #  we need to go through all nodes in that memory location and see if
-            #  there is an HB path between them.
-        create_graph(data=data, rf_edges=rf_edges, hb_edges=hb_edges, swa_relation=swa_relation, draw_graph=draw_graph)
-            # That means we need to have following methods:
-            # Find HB path between nodes based on HB.
+        # create_graph(data=data, rf_edges=rf_edges, hb_edges=hb_edges, swa_relation=swa_relation, draw_graph=draw_graph)
     return None
 
 if __name__ == "__main__":
-    find_data_race()
+    find_data_race('./races_traces/iriw3.txt', draw_graph=True)
