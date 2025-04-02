@@ -27,9 +27,25 @@ class TestFindDataRace(unittest.TestCase):
         self.assertEqual(result, None)
 
     # Program 2 from overleaf
-    def rel_acq_no_race(self):
+    def test_rel_acq_no_race(self):
         result = find_data_race('./races_traces/rel_acq_no_race1.txt')
         self.assertEqual(result, None)
+
+    def test_iriw_1(self):
+        result = find_data_race('./races_traces/iriw1.txt')
+        self.assertEqual(result, (10, 12))
+
+    def test_iriw_2(self):
+        result = find_data_race('./races_traces/iriw2.txt')
+        self.assertEqual(result, (10, 11))
+
+    def test_iriw_3(self):
+        result = find_data_race('./races_traces/iriw3.txt')
+        self.assertEqual(result, (10, 14))
+
+    def test_iriw_4(self):
+        result = find_data_race('./races_traces/iriw4.txt')
+        self.assertEqual(result, (10, 13))
 
 if __name__ == '__main__':
     unittest.main()
