@@ -16,7 +16,6 @@ def read_from_file(path: str):
             match = re.match(pattern, line.strip())
 
             if match:
-                print(match)
                 row = {
                     '#': int(match.group(1)),
                     'thread': int(match.group(2)),
@@ -178,7 +177,6 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
                 rf_edges.append((node_from, node_id))  # Created an RF edge
                 if row.MO == 'release' and mem_loc in latest_release_write:
-                    
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
                     complete_release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
@@ -206,7 +204,6 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                         # here assuming that another release from the same thread will be a part of ongoing sequence
                         ongoing_release_sequences[start_node].append(node_id)
                     else:
-                        # TODO: atomic Write-Modify-Read from any thread should not break the sequence. Right now it is not detected
                         del ongoing_release_sequences[start_node]
                         del latest_release_write[mem_loc]
                         if row.MO == 'release':
@@ -234,6 +231,10 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                         print(f'Known HB relations: \n{hb_edges}')
                         return (potential_race_id, node_id)
 
+            case 'atomic rmw':
+                if mem_loc in latest_release_write:
+                    start_node = latest_release_write[mem_loc]
+                    ongoing_release_sequences[start_node].append(node_id)
 
             case _:
                 pass
