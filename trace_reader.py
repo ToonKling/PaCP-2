@@ -106,14 +106,21 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
     data = read_from_file(fileName)
 
     # Aleks code:
+    node_to_thread = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
-    latest_release_write: dict[str, int] = dict()
+    thread_creator = []  # instruction creating a thread # TODO
+    latest_release_write: dict[str, int] = dict() # {memory location :(node_id, thread_id)}
+    # list of release sequences that ended with an acquire
+    complete_release_sequences: list[list[int]] = []
+    # {node - sequqnce} map with sequences that are not complete or broken yet
+    ongoing_release_sequences: dict[int, list[int]] = dict()
+    # node_mem_loc = dict()  # not used atm
+    mem_loc_node: dict[int, set] = defaultdict(set)
     not_ordered_memory_locations = set()  # relaxed or acquire
     node_write = set()
     rf_edges: list[tuple[int, int]] = []
     hb_edges: list[tuple[int, int]] = []
     swa_relation: list[tuple[int, int]] = []
-    sw_relation: list[tuple[int, int]] = []
 
     # Add init node # How do we get it to have certain memory location?
     node_write.add(0)
@@ -124,7 +131,8 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
         node_id: int = int(row._0)
 
         # Each node has a thread number:
-        thread_number = row.thread
+        thread_id = row.thread
+        node_to_thread[node_id] = thread_id
         # Node has an instruction type: read, write, other
         instr = row._2;
         mem_loc = row.Location
@@ -135,10 +143,11 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
 
         # Add po (hb) edges:
 
-        if thread_number in last_seen_thread:
-            hb_edges.append((last_seen_thread.get(thread_number), node_id))
+        if thread_id in last_seen_thread:
+            # print(last_seen_thread.get(thread_number))
+            hb_edges.append((last_seen_thread.get(thread_id), node_id))
 
-        last_seen_thread[thread_number] = node_id
+        last_seen_thread[thread_id] = node_id
 
         match instr:
             case 'thread start':
@@ -167,8 +176,13 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
                 node_from = int(row.RF)
 
                 rf_edges.append((node_from, node_id))  # Created an RF edge
-                if row.MO == 'release' and mem_loc in latest_release_write.keys():
-                    sw_relation.append((latest_release_write[mem_loc], node_id))
+                if row.MO == 'release' and mem_loc in latest_release_write:
+                    
+                    start_node = latest_release_write[mem_loc]
+                    ongoing_release_sequences[start_node].append(node_id)
+                    complete_release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
+                    del ongoing_release_sequences[start_node]
+                    del latest_release_write[mem_loc]
                 # Create an HB edge:
                 if node_id not in not_ordered_memory_locations and \
                         node_from not in not_ordered_memory_locations:
@@ -181,8 +195,31 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
             case 'atomic write':
                 node_write.add(node_id)
 
-                if row.MO == 'release':
-                    latest_release_write[mem_loc] = thread_number
+                if row.MO == 'release' and mem_loc not in latest_release_write:
+                        latest_release_write[mem_loc] = node_id
+                        ongoing_release_sequences[node_id] = [node_id]
+                elif mem_loc in latest_release_write:
+                    # any write from the same thread continues release sequence
+                    start_node = latest_release_write[mem_loc]
+                    if node_to_thread[start_node] == thread_id:
+                        # here assuming that another release from the same thread will be a part of ongoing sequence
+                        ongoing_release_sequences[start_node].append(node_id)
+                    else:
+                        # TODO: atomic Write-Modify-Read from any thread should not break the sequence. Right now it is not detected
+                        del ongoing_release_sequences[start_node]
+                        del latest_release_write[mem_loc]
+                        if row.MO == 'release':
+                            # if sequence is broken by another release, start a new sequence
+                            latest_release_write[mem_loc] = node_id
+                            ongoing_release_sequences[node_id] = [node_id]
+
+
+                for enemy in mem_loc_node[mem_loc]:
+                    if node_id == int(enemy) or node_to_thread[int(enemy)] == thread_id:
+                        continue # We only consider nodes in different threads
+
+                    # TODO: If HB path does not exist, we have a data race.
+                    # Maybe use a union-find struct for that? Hmmm
 
                 # Find write-write data races
                 operations_before = data[data['#'] <= node_id]
