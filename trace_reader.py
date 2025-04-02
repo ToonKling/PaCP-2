@@ -7,7 +7,7 @@ from collections import defaultdict
 
 
 def read_from_file(path: str):
-    pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+((\d*))\s+\(([\d,\s]+)\)$'
+    pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+(\(\d+\))?\s+(\d*)\s+\(([\d,\s]+)\)$'
     row_list = []
 
     with open(path, 'r') as f:
@@ -16,6 +16,7 @@ def read_from_file(path: str):
             match = re.match(pattern, line.strip())
 
             if match:
+                print(match)
                 row = {
                     '#': int(match.group(1)),
                     'thread': int(match.group(2)),
@@ -23,12 +24,12 @@ def read_from_file(path: str):
                     'MO': match.group(4),
                     'Location': match.group(5),
                     'Value': match.group(6),
-                    'RF': match.group(7) if match.group(7) else ''
+                    # group 7 is the number in brackets for rwm operations
+                    'RF': match.group(8) if match.group(8) else ''
                 }
                 row_list.append(row)
             else:
-                print(line)
-                raise RuntimeError('unexpected line format')
+                raise RuntimeError(f'unexpected line format in line\n{line}')
     return pd.DataFrame(row_list)
 
 # I don't claim this is efficient, I leave that to the algorithmics people ;)
@@ -102,7 +103,7 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
     if draw_graph:
         plt.show()
 
-def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw_graph: bool = False) -> tuple[int, int] | None:
+def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] | None:
     data = read_from_file(fileName)
 
     # Aleks code:
@@ -241,4 +242,4 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt', draw
     return None
 
 if __name__ == "__main__":
-    find_data_race('./races_traces/iriw3.txt', draw_graph=True)
+    find_data_race('./races_traces/seq_cst_no_race1.txt', draw_graph=True)
