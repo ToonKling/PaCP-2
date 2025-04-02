@@ -43,3 +43,4 @@ db.sqlite3
 # Secrets and environment files
 .env*
 *.pem
+*.png

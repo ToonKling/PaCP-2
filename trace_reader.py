@@ -230,4 +230,5 @@ def find_data_race(fileName: str = './races_traces/double_write_race1.txt') -> t
             # Find HB path between nodes based on HB.
     return None
 
-find_data_race()
+if __name__ == "__main__":
+    find_data_race()
