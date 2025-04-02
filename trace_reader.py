@@ -162,6 +162,7 @@ for row in data.itertuples(index=False):
                 pass # This is the starting node, we do nothing
             elif data[data['#'] == node_id-1]['Action type'].iloc[0] == 'thread create':
                 swa_relation.append((node_id - 1, node_id))
+                hb_edges.append((node_id - 1, node_id))
             else:
                 # If this is not the starting node, and the starting thread was not created right before,
                 # then we atm have no reliable way of finding the swa relation. I hope this will never occur.
@@ -175,6 +176,7 @@ for row in data.itertuples(index=False):
             thread_finish_node = int(thread_finish_on_right_thread['#'].iloc[-1])
 
             swa_relation.append((thread_finish_node, node_id))
+            hb_edges.append((thread_finish_node, node_id))
 
             pass
         case 'atomic read':
