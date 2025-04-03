@@ -109,21 +109,17 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
     node_to_thread = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
     thread_creator = []  # instruction creating a thread # TODO
-    latest_release_write: dict[str, int] = dict() # {memory location :(node_id, thread_id)}
+    latest_release_write: dict[str, int] = dict() # {memory location : node_id}
     # list of release sequences that ended with an acquire
-    complete_release_sequences: list[list[int]] = []
+    release_sequences: list[list[int]] = []
+    acquire_to_release: dict[int, int] = dict() # from acquire to release according to release sequence
     # {node - sequqnce} map with sequences that are not complete or broken yet
     ongoing_release_sequences: dict[int, list[int]] = dict()
     not_ordered_memory_locations = set()  # relaxed
     node_write = set()
-    rf_edges: list[tuple[int, int]] = []
-    hb_edges: list[tuple[int, int]] = []
-    swa_relation: list[tuple[int, int]] = []
-
-    # Add init node # How do we get it to have certain memory location?
-    node_write.add(0)
-    not_ordered_memory_locations.add(0)
-    hb_edges.append((0, 1))
+    rf_relations: list[tuple[int, int]] = []
+    hb_relations: list[tuple[int, int]] = []
+    sw_relations: list[tuple[int, int]] = []
 
     for row in data.itertuples(index=False):
         node_id: int = int(row._0)
@@ -143,7 +139,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
         if thread_id in last_seen_thread:
             # print(last_seen_thread.get(thread_number))
-            hb_edges.append((last_seen_thread.get(thread_id), node_id))
+            hb_relations.append((last_seen_thread.get(thread_id), node_id))
 
         last_seen_thread[thread_id] = node_id
 
@@ -152,8 +148,8 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 if node_id == 1:
                     pass # This is the starting node, we do nothing
                 elif data[data['#'] == node_id-1]['Action type'].iloc[0] == 'thread create':
-                    swa_relation.append((node_id - 1, node_id))
-                    hb_edges.append((node_id - 1, node_id))
+                    sw_relations.append((node_id - 1, node_id)) # adding an asw relation
+                    hb_relations.append((node_id - 1, node_id))
                 else:
                     # If this is not the starting node, and the starting thread was not created right before,
                     # then we atm have no reliable way of finding the swa relation. I hope this will never occur.
@@ -165,25 +161,34 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 all_thread_finishes = data[data['Action type'] == 'thread finish']
                 thread_finish_on_right_thread = all_thread_finishes[all_thread_finishes['thread'] == thread_joined]
                 thread_finish_node = int(thread_finish_on_right_thread['#'].iloc[-1])
-
-                swa_relation.append((thread_finish_node, node_id))
-                hb_edges.append((thread_finish_node, node_id))
+                sw_relations.append((thread_finish_node, node_id)) # adding an asw relation
+                hb_relations.append((thread_finish_node, node_id))
 
                 pass
             case 'atomic read':
                 node_from = int(row.RF)
-                rf_edges.append((node_from, node_id))  # Created an RF edge
+                rf_relations.append((node_from, node_id))  # Created an RF edge
                 if row.MO == 'release' and mem_loc in latest_release_write:
                     # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
-                    hb_edges.append(start_node, node_id) # add sw edge as HD edg
+                    acquire_to_release[node_id] = start_node
+                    if thread_id != node_to_thread(start_node):
+                        sw_relations.append(start_node, node_id) # add sw edge as release/acquire synchronization case 1
+                    # cleanup
+                    release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
+                    del ongoing_release_sequences[start_node]
+                    del latest_release_write[mem_loc]
                 if row.MO == 'consume' and mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
-                    complete_release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
+                    # cleanup
+                    release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
                     del ongoing_release_sequences[start_node]
                     del latest_release_write[mem_loc]
+                if node_from in acquire_to_release:
+                    sw_relations.append((acquire_to_release[node_id], node_id))# add sw edge as release/acquire synchronization case 2
+                
 
             case 'atomic write':
                 node_write.add(node_id)
@@ -222,16 +227,16 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic read')]
                 exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
                 for potential_race_id in exclude_self['#']:
-                        if not path_exists(hb_edges, potential_race_id, node_id):
+                        if not path_exists(hb_relations, potential_race_id, node_id):
                             print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
-                            print(f'Known HB relations: \n{hb_edges}')
+                            print(f'Known HB relations: \n{hb_relations}')
                             return (potential_race_id, node_id)
             case 'atomic_read':
                 # TODO: I am unsure about this check
                 node_from = int(row.RF)
                 if not (node_id not in not_ordered_memory_locations and \
                         node_from not in not_ordered_memory_locations) and \
-                node_from in node_write and path_exists(hb_edges, node_from, node_id):
+                node_from in node_write and path_exists(hb_relations, node_from, node_id):
                     print(f"DATA RACE between nodes {node_from} and {node_id}")
                     return (node_from, node_id)
             case _: pass
