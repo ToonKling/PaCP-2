@@ -32,9 +32,9 @@ def read_from_file(path: str):
     return pd.DataFrame(row_list)
 
 # I don't claim this is efficient, I leave that to the algorithmics people ;)
-def path_exists(hb_edges: list[tuple[int, int]], from_node: int, to_node: int) -> bool:
+def path_exists(hb_edges: set[tuple[int, int]], from_node: int, to_node: int) -> bool:
     lookup_table = defaultdict(set)
-    for u, v in hb_edges:
+    for (u, v) in hb_edges:
         lookup_table[u].add(v)
     visited = set()
 
@@ -105,7 +105,6 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
 def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] | None:
     data = read_from_file(fileName)
 
-    # Aleks code:
     node_to_thread = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
     thread_creator = []  # instruction creating a thread # TODO
@@ -113,13 +112,14 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
     # list of release sequences that ended with an acquire
     release_sequences: list[list[int]] = []
     acquire_to_release: dict[int, int] = dict() # from acquire to release according to release sequence
+    consume_to_release: dict[int, int] = dict() 
     # {node - sequqnce} map with sequences that are not complete or broken yet
     ongoing_release_sequences: dict[int, list[int]] = dict()
     not_ordered_memory_locations = set()  # relaxed
     node_write = set()
-    rf_relations: list[tuple[int, int]] = []
-    hb_relations: list[tuple[int, int]] = []
-    sw_relations: list[tuple[int, int]] = []
+    rf_relations: set[tuple[int, int]] = set()
+    hb_relations: set[tuple[int, int]] = set()
+    sw_relations: set[tuple[int, int]] = set()
 
     for row in data.itertuples(index=False):
         node_id: int = int(row._0)
@@ -139,7 +139,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
         if thread_id in last_seen_thread:
             # print(last_seen_thread.get(thread_number))
-            hb_relations.append((last_seen_thread.get(thread_id), node_id))
+            hb_relations.add((last_seen_thread.get(thread_id), node_id))
 
         last_seen_thread[thread_id] = node_id
 
@@ -148,8 +148,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 if node_id == 1:
                     pass # This is the starting node, we do nothing
                 elif data[data['#'] == node_id-1]['Action type'].iloc[0] == 'thread create':
-                    sw_relations.append((node_id - 1, node_id)) # adding an asw relation
-                    hb_relations.append((node_id - 1, node_id))
+                    sw_relations.add((node_id - 1, node_id)) # adding an asw relation
                 else:
                     # If this is not the starting node, and the starting thread was not created right before,
                     # then we atm have no reliable way of finding the swa relation. I hope this will never occur.
@@ -161,33 +160,33 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 all_thread_finishes = data[data['Action type'] == 'thread finish']
                 thread_finish_on_right_thread = all_thread_finishes[all_thread_finishes['thread'] == thread_joined]
                 thread_finish_node = int(thread_finish_on_right_thread['#'].iloc[-1])
-                sw_relations.append((thread_finish_node, node_id)) # adding an asw relation
-                hb_relations.append((thread_finish_node, node_id))
+                sw_relations.add((thread_finish_node, node_id)) # adding an asw relation
 
                 pass
             case 'atomic read':
                 node_from = int(row.RF)
-                rf_relations.append((node_from, node_id))  # Created an RF edge
+                rf_relations.add((node_from, node_id))  # Created an RF edge
                 if row.MO == 'release' and mem_loc in latest_release_write:
                     # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
                     acquire_to_release[node_id] = start_node
                     if thread_id != node_to_thread(start_node):
-                        sw_relations.append(start_node, node_id) # add sw edge as release/acquire synchronization case 1
+                        sw_relations.add(start_node, node_id) # add sw edge as release/acquire synchronization case 1
                     # cleanup
-                    release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
+                    release_sequences.add(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
                     del ongoing_release_sequences[start_node]
                     del latest_release_write[mem_loc]
                 if row.MO == 'consume' and mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
+                    consume_to_release[node_id] = start_node
                     # cleanup
                     release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
                     del ongoing_release_sequences[start_node]
                     del latest_release_write[mem_loc]
                 if node_from in acquire_to_release:
-                    sw_relations.append((acquire_to_release[node_id], node_id))# add sw edge as release/acquire synchronization case 2
+                    sw_relations.add((acquire_to_release[node_id], node_id))# add sw edge as release/acquire synchronization case 2
                 
 
             case 'atomic write':
