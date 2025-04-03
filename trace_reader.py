@@ -114,9 +114,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
     complete_release_sequences: list[list[int]] = []
     # {node - sequqnce} map with sequences that are not complete or broken yet
     ongoing_release_sequences: dict[int, list[int]] = dict()
-    # node_mem_loc = dict()  # not used atm
-    mem_loc_node: dict[int, set] = defaultdict(set)
-    not_ordered_memory_locations = set()  # relaxed or acquire
+    not_ordered_memory_locations = set()  # relaxed
     node_write = set()
     rf_edges: list[tuple[int, int]] = []
     hb_edges: list[tuple[int, int]] = []
@@ -174,34 +172,21 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 pass
             case 'atomic read':
                 node_from = int(row.RF)
-
                 rf_edges.append((node_from, node_id))  # Created an RF edge
                 if row.MO == 'release' and mem_loc in latest_release_write:
-                    # to my understanding, only consume finishes the release sequence, 
-                    # therefore last 3 lines are ocmmented out.
+                    # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
-                    hb_edges.append(start_node, node_id) # add sw edge as HD edge
-                    # complete_release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
-                    # del ongoing_release_sequences[start_node]
-                    # del latest_release_write[mem_loc]
+                    hb_edges.append(start_node, node_id) # add sw edge as HD edg
                 if row.MO == 'consume' and mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
                     complete_release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
                     del ongoing_release_sequences[start_node]
                     del latest_release_write[mem_loc]
-                # Create an HB edge:
-                if node_id not in not_ordered_memory_locations and \
-                        node_from not in not_ordered_memory_locations:
-                    hb_edges.append((node_from, node_id))
-                elif node_from in node_write and path_exists(hb_edges, node_from, node_id): # I think this already meets conditions for a data race.
-                    print(f"DATA RACE between nodes {node_from} and {node_id}")
-                    return (node_from, node_id)
 
             case 'atomic write':
                 node_write.add(node_id)
-
                 if row.MO == 'release' and mem_loc not in latest_release_write:
                         latest_release_write[mem_loc] = node_id
                         ongoing_release_sequences[node_id] = [node_id]
@@ -218,12 +203,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                             # if sequence is broken by another release, start a new sequence
                             latest_release_write[mem_loc] = node_id
                             ongoing_release_sequences[node_id] = [node_id]
-
-                # Find write-write data races
-                operations_before = data[data['#'] <= node_id]
-                access_same_loc = operations_before[operations_before['Location'] == mem_loc]
-                writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic read')]
-                exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
+                
 
             case 'atomic rmw':
                 if mem_loc in latest_release_write:
@@ -234,12 +214,27 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 pass
 
         # =============== Relations updated ============================
-        if instr == 'atomic write':
-            for potential_race_id in exclude_self['#']:
-                    if not path_exists(hb_edges, potential_race_id, node_id):
-                        print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
-                        print(f'Known HB relations: \n{hb_edges}')
-                        return (potential_race_id, node_id)
+        match instr: 
+            case 'atomic write':
+                # Find write-write data races
+                operations_before = data[data['#'] <= node_id]
+                access_same_loc = operations_before[operations_before['Location'] == mem_loc]
+                writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic read')]
+                exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
+                for potential_race_id in exclude_self['#']:
+                        if not path_exists(hb_edges, potential_race_id, node_id):
+                            print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
+                            print(f'Known HB relations: \n{hb_edges}')
+                            return (potential_race_id, node_id)
+            case 'atomic_read':
+                # TODO: I am unsure about this check
+                node_from = int(row.RF)
+                if not (node_id not in not_ordered_memory_locations and \
+                        node_from not in not_ordered_memory_locations) and \
+                node_from in node_write and path_exists(hb_edges, node_from, node_id):
+                    print(f"DATA RACE between nodes {node_from} and {node_id}")
+                    return (node_from, node_id)
+            case _: pass
 
     return None
 
