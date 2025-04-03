@@ -177,6 +177,15 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
                 rf_edges.append((node_from, node_id))  # Created an RF edge
                 if row.MO == 'release' and mem_loc in latest_release_write:
+                    # to my understanding, only consume finishes the release sequence, 
+                    # therefore last 3 lines are ocmmented out.
+                    start_node = latest_release_write[mem_loc]
+                    ongoing_release_sequences[start_node].append(node_id)
+                    hb_edges.append(start_node, node_id) # add sw edge as HD edge
+                    # complete_release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
+                    # del ongoing_release_sequences[start_node]
+                    # del latest_release_write[mem_loc]
+                if row.MO == 'consume' and mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
                     complete_release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
@@ -189,7 +198,6 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 elif node_from in node_write and path_exists(hb_edges, node_from, node_id): # I think this already meets conditions for a data race.
                     print(f"DATA RACE between nodes {node_from} and {node_id}")
                     return (node_from, node_id)
-                    # break
 
             case 'atomic write':
                 node_write.add(node_id)
@@ -211,25 +219,11 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                             latest_release_write[mem_loc] = node_id
                             ongoing_release_sequences[node_id] = [node_id]
 
-
-                for enemy in mem_loc_node[mem_loc]:
-                    if node_id == int(enemy) or node_to_thread[int(enemy)] == thread_id:
-                        continue # We only consider nodes in different threads
-
-                    # TODO: If HB path does not exist, we have a data race.
-                    # Maybe use a union-find struct for that? Hmmm
-
                 # Find write-write data races
                 operations_before = data[data['#'] <= node_id]
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic read')]
                 exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
-
-                for potential_race_id in exclude_self['#']:
-                    if not path_exists(hb_edges, potential_race_id, node_id):
-                        print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
-                        print(f'Known HB relations: \n{hb_edges}')
-                        return (potential_race_id, node_id)
 
             case 'atomic rmw':
                 if mem_loc in latest_release_write:
@@ -239,7 +233,14 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
             case _:
                 pass
 
-        # create_graph(data=data, rf_edges=rf_edges, hb_edges=hb_edges, swa_relation=swa_relation, draw_graph=draw_graph)
+        # =============== Relations updated ============================
+        if instr == 'atomic write':
+            for potential_race_id in exclude_self['#']:
+                    if not path_exists(hb_edges, potential_race_id, node_id):
+                        print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
+                        print(f'Known HB relations: \n{hb_edges}')
+                        return (potential_race_id, node_id)
+
     return None
 
 if __name__ == "__main__":
