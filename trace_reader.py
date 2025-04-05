@@ -102,6 +102,8 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
     if draw_graph:
         plt.show()
 
+
+
 def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] | None:
     data = read_from_file(fileName)
 
@@ -117,17 +119,16 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
     ongoing_release_sequences: dict[int, list[int]] = dict()
     not_ordered_memory_locations = set()  # relaxed
     node_write = set()
+    sb_relations: set[tuple[int, int]] = set()
     rf_relations: set[tuple[int, int]] = set()
-    hb_relations: set[tuple[int, int]] = set()
     sw_relations: set[tuple[int, int]] = set()
+    hb_relations: set[tuple[int, int]] = set()
+
 
     for row in data.itertuples(index=False):
         node_id: int = int(row._0)
-
-        # Each node has a thread number:
         thread_id = row.thread
         node_to_thread[node_id] = thread_id
-        # Node has an instruction type: read, write, other
         instr = row._2;
         mem_loc = row.Location
 
@@ -135,12 +136,8 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
         if row.MO == 'relaxed':
             not_ordered_memory_locations.add(node_id)
 
-        # Add po (hb) edges:
-
         if thread_id in last_seen_thread:
-            # print(last_seen_thread.get(thread_number))
-            hb_relations.add((last_seen_thread.get(thread_id), node_id))
-
+            sb_relations.add((last_seen_thread.get(thread_id), node_id))
         last_seen_thread[thread_id] = node_id
 
         match instr:
@@ -216,6 +213,10 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
             case _:
                 pass
+
+        hb_relations.add((node_id, node_id)) # for some reason it is explicitely mentioned in dob part
+        hb_relations.update(sb_relations)
+        hb_relations.update(sw_relations) # as a part of dob
 
         # =============== Relations updated ============================
         match instr: 
