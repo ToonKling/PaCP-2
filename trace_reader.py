@@ -213,8 +213,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
             case _:
                 pass
-
-        hb_relations.add((node_id, node_id)) # for some reason it is explicitely mentioned in dob part
+            
         hb_relations.update(sb_relations)
         hb_relations.update(sw_relations) # as a part of dob
 
