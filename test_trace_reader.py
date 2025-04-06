@@ -47,5 +47,9 @@ class TestFindDataRace(unittest.TestCase):
         result = find_data_race('./races_traces/iriw4.txt')
         self.assertEqual(result, (10, 13))
 
+    def test_chase_lev_deque(self):
+        result = find_data_race('./races_traces/chase_lev_deque1.txt')
+        self.assertEqual(result, (18, 27))
+
 if __name__ == '__main__':
     unittest.main()
