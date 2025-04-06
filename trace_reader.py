@@ -243,4 +243,4 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
     return None
 
 if __name__ == "__main__":
-    find_data_race('./races_traces/seq_cst_no_race1.txt', draw_graph=True)
+    find_data_race('./output.txt', draw_graph=True)
