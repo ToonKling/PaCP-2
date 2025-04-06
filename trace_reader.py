@@ -235,7 +235,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 node_from = int(row.RF)
                 if not (node_id not in not_ordered_memory_locations and \
                         node_from not in not_ordered_memory_locations) and \
-                node_from in node_write and path_exists(hb_relations, node_from, node_id):
+                node_from in node_write and not path_exists(hb_relations, node_from, node_id):
                     print(f"DATA RACE between nodes {node_from} and {node_id}")
                     return (node_from, node_id)
             case _: pass
