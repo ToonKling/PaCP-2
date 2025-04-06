@@ -230,7 +230,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                             print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
                             print(f'Known HB relations: \n{hb_relations}')
                             return (potential_race_id, node_id)
-            case 'atomic_read':
+            case 'atomic read':
                 # TODO: I am unsure about this check
                 node_from = int(row.RF)
                 if not (node_id not in not_ordered_memory_locations and \
