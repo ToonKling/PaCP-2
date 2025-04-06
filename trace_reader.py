@@ -7,7 +7,7 @@ from collections import defaultdict
 
 
 def read_from_file(path: str):
-    pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+(\(\d+\))?\s+(\d*)\s+\(([\d,\s]+)\)$'
+    pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+|\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+(\(\d+\))?\s+(\d*)\s+\(([\d,\s]+)\)$'
     row_list = []
 
     with open(path, 'r') as f:
