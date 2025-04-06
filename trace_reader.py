@@ -44,7 +44,7 @@ def path_exists(hb_edges: set[tuple[int, int]], from_node: int, to_node: int) ->
         if search_node in visited:
             return False
         visited.add(search_node)
-        return any([dfs(neighbour) for neighbour in lookup_table[from_node]])
+        return any([dfs(neighbour) for neighbour in lookup_table[search_node]])
     return dfs(from_node)
 
 def get_pos(data, node_id: int) -> tuple[int, int]:
