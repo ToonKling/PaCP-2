@@ -144,7 +144,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
             case 'thread start':
                 if node_id == 1:
                     pass # This is the starting node, we do nothing
-                elif data[data['#'] == node_id-1]['Action type'].iloc[0] == 'thread create':
+                elif data[data['#'] == node_id-1]['Action type'].iloc[0] in ['thread create', 'pthread create']:
                     sw_relations.add((node_id - 1, node_id)) # adding an asw relation
                 else:
                     # If this is not the starting node, and the starting thread was not created right before,
