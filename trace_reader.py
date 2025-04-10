@@ -4,32 +4,36 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from collections import defaultdict
 
+pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+|\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+(\([\da-f]+\))?\s+(\d*)\s+\(([\d,\s]+)\)$'
 
 
 def read_from_file(path: str):
-    pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+|\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+(\([\da-f]+\))?\s+(\d*)\s+\(([\d,\s]+)\)$'
     row_list = []
 
     with open(path, 'r') as f:
         lines = [line.strip() for line in f if line.strip()]
+        print(f'Read the lines')
         for line in lines:
-            match = re.match(pattern, line.strip())
-
-            if match:
-                row = {
-                    '#': int(match.group(1)),
-                    'thread': int(match.group(2)),
-                    'Action type': match.group(3).strip(),
-                    'MO': match.group(4),
-                    'Location': match.group(5),
-                    'Value': match.group(6),
-                    # group 7 is the number in brackets for rwm operations
-                    'RF': match.group(8) if match.group(8) else ''
-                }
-                row_list.append(row)
-            else:
-                raise RuntimeError(f'unexpected line format in line\n{line}')
+            row_list.append(line)
     return pd.DataFrame(row_list)
+
+def read_line(line):
+    match = re.match(pattern, line.strip())
+
+    if match:
+        return {
+            '#': int(match.group(1)),
+            'thread': int(match.group(2)),
+            'Action type': match.group(3).strip(),
+            'MO': match.group(4),
+            'Location': match.group(5),
+            'Value': match.group(6),
+            # group 7 is the number in brackets for rwm operations
+            'RF': match.group(8) if match.group(8) else ''
+        }
+    else:
+        raise RuntimeError(f'unexpected line format in line\n{line}')
+
 
 # I don't claim this is efficient, I leave that to the algorithmics people ;)
 def path_exists(hb_edges: set[tuple[int, int]], from_node: int, to_node: int) -> bool:
@@ -105,7 +109,9 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
 
 
 def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] | None:
-    data = read_from_file(fileName)
+    print(f'Finding the data race')
+    raw_lines = read_from_file(fileName)
+    print(f'Read the file')
 
     node_to_thread = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
@@ -124,16 +130,19 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
     sw_relations: set[tuple[int, int]] = set()
     hb_relations: set[tuple[int, int]] = set()
 
-
-    for row in data.itertuples(index=False):
-        node_id: int = int(row._0)
-        thread_id = row.thread
+    parsed_rows = []
+    for row_raw in raw_lines.itertuples(index=False):
+        row = read_line(row_raw._0)
+        parsed_rows.append(row)
+        data = pd.DataFrame(parsed_rows)
+        node_id: int = int(row['#'])
+        thread_id = row['thread']
         node_to_thread[node_id] = thread_id
-        instr = row._2;
-        mem_loc = row.Location
+        instr = row['Action type'];
+        mem_loc = row['Location']
 
         # memory ordering:
-        if row.MO == 'relaxed':
+        if row['MO'] == 'relaxed':
             not_ordered_memory_locations.add(node_id)
 
         if thread_id in last_seen_thread:
@@ -153,7 +162,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
             case 'thread join': # Thread finished also get handled here, but is delayed till we find a thread join
 
                 # Idea: Search backwards for the thread finish in the correct thread
-                thread_joined = int(row.Value, 16) # Assumption: data has a form like '0x3', then this is '3'
+                thread_joined = int(row['Value'], 16) # Assumption: data has a form like '0x3', then this is '3'
                 all_thread_finishes = data[data['Action type'] == 'thread finish']
                 thread_finish_on_right_thread = all_thread_finishes[all_thread_finishes['thread'] == thread_joined]
                 thread_finish_node = int(thread_finish_on_right_thread['#'].iloc[-1])
@@ -161,9 +170,9 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
                 pass
             case 'atomic read':
-                node_from = int(row.RF)
+                node_from = int(row['RF'])
                 rf_relations.add((node_from, node_id))  # Created an RF edge
-                if row.MO == 'release' and mem_loc in latest_release_write:
+                if row['MO'] == 'release' and mem_loc in latest_release_write:
                     # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
@@ -174,7 +183,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                     release_sequences.add(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
                     del ongoing_release_sequences[start_node]
                     del latest_release_write[mem_loc]
-                if row.MO == 'consume' and mem_loc in latest_release_write:
+                if row['MO'] == 'consume' and mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
                     consume_to_release[node_id] = start_node
@@ -188,7 +197,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
 
             case 'atomic write':
                 node_write.add(node_id)
-                if row.MO == 'release' and mem_loc not in latest_release_write:
+                if row['MO'] == 'release' and mem_loc not in latest_release_write:
                         latest_release_write[mem_loc] = node_id
                         ongoing_release_sequences[node_id] = [node_id]
                 elif mem_loc in latest_release_write:
@@ -200,7 +209,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                     else:
                         del ongoing_release_sequences[start_node]
                         del latest_release_write[mem_loc]
-                        if row.MO == 'release':
+                        if row['MO'] == 'release':
                             # if sequence is broken by another release, start a new sequence
                             latest_release_write[mem_loc] = node_id
                             ongoing_release_sequences[node_id] = [node_id]
@@ -210,6 +219,8 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                 if mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
+                node_write.add(node_id)
+                # TODO: Do we need to add this to some read stuff?
 
             case _:
                 pass
@@ -229,18 +240,22 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> tuple[int, int] |
                         if not path_exists(hb_relations, potential_race_id, node_id):
                             print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
                             print(f'Known HB relations: \n{hb_relations}')
+                            create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
                             return (potential_race_id, node_id)
             case 'atomic read':
                 # TODO: I am unsure about this check
-                node_from = int(row.RF)
+                node_from = int(row['RF'])
+                print(f'Comparing {node_from} to {node_id}, path_exists: {path_exists(hb_relations, node_from, node_id)}')
                 if not (node_id not in not_ordered_memory_locations and \
                         node_from not in not_ordered_memory_locations) and \
                 node_from in node_write and not path_exists(hb_relations, node_from, node_id):
                     print(f"DATA RACE between nodes {node_from} and {node_id}")
+                    create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
                     return (node_from, node_id)
             case _: pass
+        # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
 
     return None
 
 if __name__ == "__main__":
-    find_data_race('./output.txt', draw_graph=True)
+    find_data_race('./races_traces/silo1.txt', draw_graph=True)
