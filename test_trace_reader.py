@@ -60,5 +60,10 @@ class TestFindDataRace(unittest.TestCase):
         r_race = find_data_race('./races_traces/loops2.txt')
         self.assertEqual([], r_norace)
         self.assertIn((7, 9), r_race)
+
+    def test_spsc(self):
+        result = find_data_race('./races_traces/spsc_queue1.txt')
+        self.assertIn((11, 14), result)
+
 if __name__ == '__main__':
     unittest.main()
