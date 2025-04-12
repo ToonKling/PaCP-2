@@ -131,6 +131,7 @@ class TestFindDataRace(unittest.TestCase):
         r_norace = find_data_race('./races_traces/loops1.txt')
         r_race = find_data_race('./races_traces/loops2.txt')
         self.assertIn((8, 23), r_norace)
+        self.assertNotIn((6, 9), r_norace)
         self.assertIn((6, 9), r_race)
 if __name__ == '__main__':
     unittest.main()
