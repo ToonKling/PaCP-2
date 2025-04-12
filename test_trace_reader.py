@@ -55,5 +55,10 @@ class TestFindDataRace(unittest.TestCase):
         result = find_data_race('./races_traces/dekker_fences1.txt')
         self.assertIn((9, 12), result)
 
+    def test_loops(self):
+        r_norace = find_data_race('./races_traces/loops1.txt')
+        r_race = find_data_race('./races_traces/loops2.txt')
+        self.assertEqual([], r_norace)
+        self.assertIn((7, 9), r_race)
 if __name__ == '__main__':
     unittest.main()

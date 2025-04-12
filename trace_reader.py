@@ -118,12 +118,9 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
 
     node_to_thread = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
-    thread_creator = []  # instruction creating a thread # TODO
-    latest_release_write: dict[str, int] = dict() # {memory location : node_id}
+    latest_release_write: dict[str, int] = defaultdict(int) # {memory location : node_id}
     # list of release sequences that ended with an acquire
-    release_sequences: list[list[int]] = []
     acquire_to_release: dict[int, int] = dict() # from acquire to release according to release sequence
-    consume_to_release: dict[int, int] = dict() 
     # {node - sequqnce} map with sequences that are not complete or broken yet
     ongoing_release_sequences: dict[int, list[int]] = dict()
     not_ordered_memory_locations = set()  # relaxed
@@ -164,6 +161,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                     # If this is not the starting node, and the starting thread was not created right before,
                     # then we atm have no reliable way of finding the swa relation. I hope this will never occur.
                     raise Exception('Could not find thread creation')
+            
             case 'thread join': # Thread finished also get handled here, but is delayed till we find a thread join
 
                 # Idea: Search backwards for the thread finish in the correct thread
@@ -174,32 +172,25 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 sw_relations.add((thread_finish_node, node_id)) # adding an asw relation
 
                 pass
+            
             case 'atomic read':
                 node_from = int(row['RF'])
                 rf_relations.add((node_from, node_id))  # Created an RF edge
-                if row['MO'] == 'release' and mem_loc in latest_release_write:
+                if node_id == 8:
+                    print(row['RF'], latest_release_write[mem_loc])
+                if row['MO'] == 'acquire' and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
                     # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
                     acquire_to_release[node_id] = start_node
-                    if thread_id != node_to_thread(start_node):
-                        sw_relations.add(start_node, node_id) # add sw edge as release/acquire synchronization case 1
-                    # cleanup
-                    release_sequences.add(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
-                    del ongoing_release_sequences[start_node]
-                    del latest_release_write[mem_loc]
-                if row['MO'] == 'consume' and mem_loc in latest_release_write:
-                    start_node = latest_release_write[mem_loc]
-                    ongoing_release_sequences[start_node].append(node_id)
-                    consume_to_release[node_id] = start_node
-                    # cleanup
-                    release_sequences.append(ongoing_release_sequences[start_node].copy()) # copy here because then I use del and idk how it actually works
-                    del ongoing_release_sequences[start_node]
-                    del latest_release_write[mem_loc]
+                    if thread_id != node_to_thread[start_node]:
+                        sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
+                    # if acquire read never concludes release sequence, no cleanup is needed
+                    # del ongoing_release_sequences[start_node]
+                    # del latest_release_write[mem_loc]
                 if node_from in acquire_to_release:
                     sw_relations.add((acquire_to_release[node_id], node_id))# add sw edge as release/acquire synchronization case 2
-                
-
+    
             case 'atomic write':
                 node_write.add(node_id)
                 if row['MO'] == 'release' and mem_loc not in latest_release_write:
@@ -208,31 +199,29 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 elif mem_loc in latest_release_write:
                     # any write from the same thread continues release sequence
                     start_node = latest_release_write[mem_loc]
-                    if node_to_thread[start_node] == thread_id:
+                    if start_node != 0 and node_to_thread[start_node] == thread_id:
                         # here assuming that another release from the same thread will be a part of ongoing sequence
                         ongoing_release_sequences[start_node].append(node_id)
                     else:
-                        del ongoing_release_sequences[start_node]
-                        del latest_release_write[mem_loc]
+                        if start_node != 0:
+                            del ongoing_release_sequences[start_node]
+                            del latest_release_write[mem_loc]
                         if row['MO'] == 'release':
                             # if sequence is broken by another release, start a new sequence
                             latest_release_write[mem_loc] = node_id
                             ongoing_release_sequences[node_id] = [node_id]
                 
-
             case 'atomic rmw':
                 if mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
                 node_write.add(node_id)
-                # TODO: Do we need to add this to some read stuff?
-
+                rf_relations.add((node_from, node_id))
             case _:
                 pass
             
         hb_relations.update(sb_relations)
-        hb_relations.update(sw_relations) # as a part of dob
-
+        hb_relations.update(sw_relations)
         # =============== Relations updated ============================
         match instr: 
             case 'atomic write':
@@ -257,9 +246,10 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                     data_races.append((node_from, node_id))
             case _: pass
         # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
-
+    print("SWS:", sw_relations)
+    print("HBS:", hb_relations)
     return data_races
 
 if __name__ == "__main__":
-    races = find_data_race('./output.txt', draw_graph=True)
+    races = find_data_race('./races_traces/loops2.txt', draw_graph=True)
     print(f'Found races: {races}')
