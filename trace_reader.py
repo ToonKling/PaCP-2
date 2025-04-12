@@ -119,6 +119,12 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
 
 
 def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, int]]:
+
+    def handle_read_acq(node_id, mem_loc, thread_id):
+        start_node = latest_release_write[mem_loc]
+        acquire_to_release[node_id] = start_node
+        if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
+            sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
     # print(f'Finding the data race')
     raw_lines = read_from_file(fileName)
     # print(f'Read the file')
@@ -186,10 +192,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 if node_id == 8:
                     print(row['RF'], latest_release_write[mem_loc])
                 if row['MO'] in ['acquire', 'seq_cst'] and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
-                    start_node = latest_release_write[mem_loc]
-                    acquire_to_release[node_id] = start_node
-                    if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
-                        sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
+                    handle_read_acq(node_id, mem_loc, thread_id)
                 if node_from in acquire_to_release:
                     sw_relations.add((acquire_to_release[node_id], node_id))# add sw edge as release/acquire synchronization case 2
     
@@ -211,10 +214,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
 
             case 'atomic rmw':
                 if row['MO'] == 'sec_cst' and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
-                    start_node = latest_release_write[mem_loc]
-                    acquire_to_release[node_id] = start_node
-                    if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
-                        sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
+                    handle_read_acq(node_id, mem_loc, thread_id)
 
                     latest_release_write[mem_loc] = node_id
                     ongoing_release_sequences[node_id] = [node_id]
@@ -239,30 +239,24 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') |
                                                    (access_same_loc['Action type'] == 'atomic read') |
                                                     (access_same_loc['Action type'] == 'atomic rmw')]
-                exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
-                for potential_race_id in exclude_self['#']:
-                    if not path_exists(hb_relations, potential_race_id, node_id):
-                        # print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
-                        # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
-                        data_races.append((potential_race_id, node_id))
-                        # return data_races
+                search_for_races(hb_relations, data_races, node_id, writes_same_loc)
             case 'atomic read':
                 # Find write-write data races
                 operations_before = data[data['#'] <= node_id]
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic rmw')]
-                exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
-                for potential_race_id in exclude_self['#']:
-                    if not path_exists(hb_relations, potential_race_id, node_id):
-                        print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
-                        # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
-                        data_races.append((potential_race_id, node_id))
-                        # return data_races
+                search_for_races(hb_relations, data_races, node_id, writes_same_loc)
             case _: pass
         # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
     print("SWS:", sw_relations)
     print("HBS:", hb_relations)
     return data_races
+
+def search_for_races(hb_relations, data_races, node_id, writes_same_loc):
+    exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
+    for potential_race_id in exclude_self['#']:
+        if not path_exists(hb_relations, potential_race_id, node_id):
+            data_races.append((potential_race_id, node_id))
 
 if __name__ == "__main__":
     races = find_data_race('./races_traces/loops2.txt', draw_graph=True)
