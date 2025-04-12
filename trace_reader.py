@@ -188,9 +188,8 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 if row['MO'] in ['acquire', 'seq_cst'] and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
                     # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
-                    ongoing_release_sequences[start_node].append(node_id)
                     acquire_to_release[node_id] = start_node
-                    if thread_id != node_to_thread[start_node]:
+                    if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
                         sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
                     # if acquire read never concludes release sequence, no cleanup is needed
                     # del ongoing_release_sequences[start_node]
