@@ -193,9 +193,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                     print(row['RF'], latest_release_write[mem_loc])
                 if row['MO'] in ['acquire', 'seq_cst'] and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
                     handle_read_acq(node_id, mem_loc, thread_id)
-                if node_from in acquire_to_release:
-                    sw_relations.add((acquire_to_release[node_id], node_id))# add sw edge as release/acquire synchronization case 2
-    
+                    
             case 'atomic write':
                 node_write.add(node_id)
                 if row['MO'] in ['release', 'seq_cst']:
@@ -215,13 +213,9 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
             case 'atomic rmw':
                 if row['MO'] == 'sec_cst' and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
                     handle_read_acq(node_id, mem_loc, thread_id)
-
-                    latest_release_write[mem_loc] = node_id
-                    ongoing_release_sequences[node_id] = [node_id]
-                else:
-                    if mem_loc in latest_release_write:
-                        start_node = latest_release_write[mem_loc]
-                        ongoing_release_sequences[start_node].append(node_id)
+                if mem_loc in latest_release_write:
+                    start_node = latest_release_write[mem_loc]
+                    ongoing_release_sequences[start_node].append(node_id)
                 node_write.add(node_id)
                 rf_relations.add((node_from, node_id))
 
