@@ -185,7 +185,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 rf_relations.add((node_from, node_id))  # Created an RF edge
                 if node_id == 8:
                     print(row['RF'], latest_release_write[mem_loc])
-                if row['MO'] == 'acquire' and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
+                if row['MO'] in ['acquire', 'seq_cst'] and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
                     # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
                     ongoing_release_sequences[start_node].append(node_id)
@@ -200,7 +200,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
     
             case 'atomic write':
                 node_write.add(node_id)
-                if row['MO'] == 'release' and mem_loc not in latest_release_write:
+                if row['MO'] in ['release', 'seq_cst'] and mem_loc not in latest_release_write:
                         latest_release_write[mem_loc] = node_id
                         ongoing_release_sequences[node_id] = [node_id]
                 elif mem_loc in latest_release_write:
@@ -238,21 +238,23 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic read')]
                 exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
                 for potential_race_id in exclude_self['#']:
-                        if not path_exists(hb_relations, potential_race_id, node_id):
-                            # print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
-                            # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
-                            data_races.append((potential_race_id, node_id))
-                            return data_races
+                    if not path_exists(hb_relations, potential_race_id, node_id):
+                        # print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
+                        # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
+                        data_races.append((potential_race_id, node_id))
+                        # return data_races
             case 'atomic read':
-                # TODO: I am unsure about this check
-                node_from = int(row['RF'])
-                if not (node_id not in not_ordered_memory_locations and \
-                        node_from not in not_ordered_memory_locations) and \
-                node_from in node_write and not path_exists(hb_relations, node_from, node_id):
-                    # print(f"DATA RACE between nodes {node_from} and {node_id}")
-                    # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=False)
-                    data_races.append((node_from, node_id))
-                    return data_races
+                # Find write-write data races
+                operations_before = data[data['#'] <= node_id]
+                access_same_loc = operations_before[operations_before['Location'] == mem_loc]
+                writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write')]
+                exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
+                for potential_race_id in exclude_self['#']:
+                    if not path_exists(hb_relations, potential_race_id, node_id):
+                        print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
+                        # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
+                        data_races.append((potential_race_id, node_id))
+                        # return data_races
             case _: pass
         # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
     print("SWS:", sw_relations)
