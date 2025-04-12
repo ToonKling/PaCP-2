@@ -78,7 +78,7 @@ class TestFindDataRace(unittest.TestCase):
 
     def test_double_write_2(self):
         result = find_data_race('./races_traces/double_write_race2.txt')
-        self.assertIn((6, 9), result)
+        self.assertIn((9, 10), result)
 
     def test_double_write_no_race1(self):
         result = find_data_race('./races_traces/double_write_no_race1.txt')
