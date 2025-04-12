@@ -246,6 +246,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                             # print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
                             # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
                             data_races.append((potential_race_id, node_id))
+                            return data_races
             case 'atomic read':
                 # TODO: I am unsure about this check
                 node_from = int(row['RF'])
@@ -255,6 +256,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                     # print(f"DATA RACE between nodes {node_from} and {node_id}")
                     # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=False)
                     data_races.append((node_from, node_id))
+                    return data_races
             case _: pass
         # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
 
