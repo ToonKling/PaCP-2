@@ -136,6 +136,7 @@ class TestFindDataRace(unittest.TestCase):
         self.assertIn((6, 9), r_race)
         self.assertEqual([], r_norace)
         self.assertIn((7, 9), r_race)
+        self.assertIn((6, 9), r_race)
 
     def test_spsc(self):
         result = find_data_race('./races_traces/spsc_queue1.txt')
