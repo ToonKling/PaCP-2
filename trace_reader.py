@@ -186,20 +186,16 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 if node_id == 8:
                     print(row['RF'], latest_release_write[mem_loc])
                 if row['MO'] in ['acquire', 'seq_cst'] and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
-                    # to my understanding, only consume finishes the release sequence
                     start_node = latest_release_write[mem_loc]
                     acquire_to_release[node_id] = start_node
                     if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
                         sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
-                    # if acquire read never concludes release sequence, no cleanup is needed
-                    # del ongoing_release_sequences[start_node]
-                    # del latest_release_write[mem_loc]
                 if node_from in acquire_to_release:
                     sw_relations.add((acquire_to_release[node_id], node_id))# add sw edge as release/acquire synchronization case 2
     
             case 'atomic write':
                 node_write.add(node_id)
-                if row['MO'] in ['release', 'seq_cst'] and mem_loc not in latest_release_write:
+                if row['MO'] in ['release', 'seq_cst']:
                         latest_release_write[mem_loc] = node_id
                         ongoing_release_sequences[node_id] = [node_id]
                 elif mem_loc in latest_release_write:
@@ -212,17 +208,23 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                         if start_node != 0:
                             del ongoing_release_sequences[start_node]
                             del latest_release_write[mem_loc]
-                        if row['MO'] == 'release':
-                            # if sequence is broken by another release, start a new sequence
-                            latest_release_write[mem_loc] = node_id
-                            ongoing_release_sequences[node_id] = [node_id]
-                
+
             case 'atomic rmw':
-                if mem_loc in latest_release_write:
+                if row['MO'] == 'sec_cst' and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
                     start_node = latest_release_write[mem_loc]
-                    ongoing_release_sequences[start_node].append(node_id)
+                    acquire_to_release[node_id] = start_node
+                    if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
+                        sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
+
+                    latest_release_write[mem_loc] = node_id
+                    ongoing_release_sequences[node_id] = [node_id]
+                else:
+                    if mem_loc in latest_release_write:
+                        start_node = latest_release_write[mem_loc]
+                        ongoing_release_sequences[start_node].append(node_id)
                 node_write.add(node_id)
                 rf_relations.add((node_from, node_id))
+
             case _:
                 pass
             
@@ -230,11 +232,13 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
         hb_relations.update(sw_relations)
         # =============== Relations updated ============================
         match instr: 
-            case 'atomic write':
+            case 'atomic write' | 'atomic rmw':
                 # Find write-write data races
                 operations_before = data[data['#'] <= node_id]
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
-                writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic read')]
+                writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') |
+                                                   (access_same_loc['Action type'] == 'atomic read') |
+                                                    (access_same_loc['Action type'] == 'atomic rmw')]
                 exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
                 for potential_race_id in exclude_self['#']:
                     if not path_exists(hb_relations, potential_race_id, node_id):
@@ -246,7 +250,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 # Find write-write data races
                 operations_before = data[data['#'] <= node_id]
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
-                writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write')]
+                writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic rmw')]
                 exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
                 for potential_race_id in exclude_self['#']:
                     if not path_exists(hb_relations, potential_race_id, node_id):
