@@ -119,9 +119,9 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
 
 
 def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, int]]:
-    print(f'Finding the data race')
+    # print(f'Finding the data race')
     raw_lines = read_from_file(fileName)
-    print(f'Read the file')
+    # print(f'Read the file')
 
     node_to_thread = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
@@ -239,18 +239,20 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 exclude_self = writes_same_loc[writes_same_loc['#'] != node_id]
                 for potential_race_id in exclude_self['#']:
                         if not path_exists(hb_relations, potential_race_id, node_id):
-                            print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
+                            # print(f'DATA RACE: {potential_race_id} and {node_id} both access {mem_loc} without a HB relation')
                             # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
                             data_races.append((potential_race_id, node_id))
+                            return data_races
             case 'atomic read':
                 # TODO: I am unsure about this check
                 node_from = int(row['RF'])
                 if not (node_id not in not_ordered_memory_locations and \
                         node_from not in not_ordered_memory_locations) and \
                 node_from in node_write and not path_exists(hb_relations, node_from, node_id):
-                    print(f"DATA RACE between nodes {node_from} and {node_id}")
+                    # print(f"DATA RACE between nodes {node_from} and {node_id}")
                     # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=False)
                     data_races.append((node_from, node_id))
+                    return data_races
             case _: pass
         # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
     print("SWS:", sw_relations)
