@@ -4,8 +4,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from collections import defaultdict
 import sys
-
-sys.setrecursionlimit(100000)
+import queue
 
 pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+|\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+(\([\da-f]+\))?\s+(\d*)\s+\(([\d,\s]+)\)$'
 
@@ -45,13 +44,21 @@ def path_exists(hb_edges: set[tuple[int, int]], from_node: int, to_node: int) ->
         lookup_table[u].add(v)
     visited = set()
 
-    def dfs(search_node: int):
+
+    search_queue = queue.Queue()
+    search_queue.put(from_node)
+    while not search_queue.empty():
+        search_node = search_queue.get()
+        visited.add(search_node)
         if search_node == to_node:
             return True
-        if search_node in visited:
-            return False
-        visited.add(search_node)
-        return any([dfs(neighbour) for neighbour in lookup_table[search_node]])
+        for possible_node in lookup_table[search_node]:
+            if possible_node not in visited:
+                search_queue.put(possible_node)
+    return False
+
+
+
     return dfs(from_node)
 
 def get_pos(data, node_id: int) -> tuple[int, int]:
