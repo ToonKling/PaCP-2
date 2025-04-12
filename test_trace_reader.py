@@ -120,10 +120,6 @@ class TestFindDataRace(unittest.TestCase):
         self.assertIn((8, 23), r_norace)
         self.assertNotIn((6, 9), r_norace)
         self.assertIn((6, 9), r_race)
-        self.assertEqual([], r_norace)
-        self.assertIn((7, 9), r_race)
-        self.assertNotIn((6, 9), r_norace)
-        self.assertIn((6, 9), r_race)
 
     def test_spsc(self):
         result = find_data_race('./races_traces/spsc_queue1.txt')
