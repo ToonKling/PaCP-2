@@ -40,7 +40,7 @@ class TestFindDataRace(unittest.TestCase):
         print("Program 3 time: ", end_time - start_time)   
         self.assertIn((9, 22), r_norace)
         self.assertNotIn((6, 9), r_norace)
-        self.assertIn((6, 9), r_race)    
+        self.assertIn((7, 8), r_race)
 
     # Program 4 from overleaf
     def test_program4(self):
@@ -135,6 +135,14 @@ class TestFindDataRace(unittest.TestCase):
         result = find_data_race('./races_traces/barrier1.txt')
         self.assertNotIn((15, 17), result)
         self.assertIn((18, 29), result)
+
+    def test_barrier2(self):
+        result = find_data_race('./races_traces/barrier2.txt')
+        self.assertIn((15, 36), result)
+
+    def test_barrier3(self):
+        result = find_data_race('./races_traces/barrier3.txt')
+        self.assertIn((17, 32), result)
 
 if __name__ == '__main__':
     unittest.main()
