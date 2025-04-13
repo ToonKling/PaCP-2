@@ -234,12 +234,16 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                                                    (access_same_loc['Action type'] == 'atomic read') |
                                                     (access_same_loc['Action type'] == 'atomic rmw')]
                 search_for_races(hb_relations, data_races, node_id, writes_same_loc)
+                if len(data_races) > 0:
+                    return data_races
             case 'atomic read':
                 # Find write-write data races
                 operations_before = data[data['#'] <= node_id]
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic rmw')]
                 search_for_races(hb_relations, data_races, node_id, writes_same_loc)
+                if len(data_races) > 0:
+                    return data_races
             case _: pass
         # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
     print("SWS:", sw_relations)
@@ -251,6 +255,7 @@ def search_for_races(hb_relations, data_races, node_id, writes_same_loc):
     for potential_race_id in exclude_self['#']:
         if not path_exists(hb_relations, potential_race_id, node_id):
             data_races.append((potential_race_id, node_id))
+            return
 
 if __name__ == "__main__":
     races = find_data_race('./races_traces/loops2.txt', draw_graph=True)

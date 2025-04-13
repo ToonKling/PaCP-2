@@ -26,7 +26,21 @@ class TestFindDataRace(unittest.TestCase):
         result = find_data_race('./races_traces/rel_acq_no_race1.txt')
         end_time = time.time()
         self.assertEqual(result, [])
-        print("Program 2 time: ", end_time - start_time)        
+        print("Program 2 time: ", end_time - start_time)    
+
+    # Program 3 from overleaf
+    def test_program3(self):
+        start_time = time.time()
+        r_norace = find_data_race('./races_traces/loops1.txt')
+        end_time = time.time()
+        print("Program 3 time: ", end_time - start_time)   
+        start_time = time.time()
+        r_race = find_data_race('./races_traces/loops2.txt')
+        end_time = time.time()
+        print("Program 3 time: ", end_time - start_time)   
+        self.assertIn((9, 22), r_norace)
+        self.assertNotIn((6, 9), r_norace)
+        self.assertIn((6, 9), r_race)    
 
     # Program 4 from overleaf
     def test_program4(self):
@@ -107,24 +121,15 @@ class TestFindDataRace(unittest.TestCase):
 
     def test_chase_lev_deque(self):
         result = find_data_race('./races_traces/chase_lev_deque1.txt')
-        self.assertIn((18, 27), result)
+        self.assertIn((17, 18), result)
 
     def test_dekker_fences(self):
         result = find_data_race('./races_traces/dekker_fences1.txt')
         self.assertIn((9, 12), result)
 
-    # Program 3 from overleaf
-    def test_loops(self):
-        r_norace = find_data_race('./races_traces/loops1.txt')
-        r_race = find_data_race('./races_traces/loops2.txt')
-        self.assertIn((21, 22), r_norace)
-        self.assertIn((8, 23), r_norace)
-        self.assertNotIn((6, 9), r_norace)
-        self.assertIn((6, 9), r_race)
-
     def test_spsc(self):
         result = find_data_race('./races_traces/spsc_queue1.txt')
-        self.assertIn((11, 14), result)
+        self.assertIn((9, 10), result)
 
 if __name__ == '__main__':
     unittest.main()
