@@ -16,7 +16,8 @@ or
 
 > python3 ./races_traces/barrier1.txt --find-all --draw-graph
 
-If the optional argument --find-all is not supplied, the algorithm will return only the first Datarace
+If the optional argument --find-all is not supplied, the algorithm will return only the first Datarace.
+
 If the optional argument --draw-graph is not supplied, no graph will be drawn of the execution trace.
 
 Alternatively, use any of the other traces provided in the `./races_traces/` folder.
