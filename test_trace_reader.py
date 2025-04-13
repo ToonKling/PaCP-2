@@ -131,5 +131,10 @@ class TestFindDataRace(unittest.TestCase):
         result = find_data_race('./races_traces/spsc_queue1.txt')
         self.assertIn((9, 10), result)
 
+    def test_barrier1(self):
+        result = find_data_race('./races_traces/barrier1.txt')
+        self.assertNotIn((15, 17), result)
+        self.assertIn((18, 29), result)
+
 if __name__ == '__main__':
     unittest.main()
