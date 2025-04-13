@@ -211,7 +211,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                     start_node = latest_release_write[mem_loc]
                 node_write.add(node_id)
                 rf_relations.add((node_from, node_id))
-                if row['MO'] in ['release', 'seq_cst']:
+                if row['MO'] == 'seq_cst':
                     latest_release_write[mem_loc] = node_id
 
             case _:
