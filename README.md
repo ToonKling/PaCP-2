@@ -22,6 +22,10 @@ If the optional argument --draw-graph is not supplied, no graph will be drawn of
 
 Alternatively, use any of the other traces provided in the `./races_traces/` folder.
 
+If you run the above example command, it will generate the following output:
+
+![Result from example script](https://github.com/user-attachments/assets/aaefa01a-03cc-4ba9-a85b-b71f35809ee3)
+
 ## Tests
 
 To run all tests, use
