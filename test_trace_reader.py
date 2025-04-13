@@ -53,7 +53,7 @@ class TestFindDataRace(unittest.TestCase):
     # Program 5 from overleaf
     def test_program5(self):
         start_time = time.time()
-        result1 = find_data_race('./races_traces/reorder1.txt')
+        result1 = find_data_race('./races_traces/reorder1.txt', find_all_races=True)
         end_time = time.time()
         print("Program 5. 1time: ", end_time - start_time)
 

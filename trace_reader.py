@@ -2,9 +2,9 @@ import regex as re
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from collections import defaultdict
-import sys
 import queue
+
+from collections import defaultdict
 
 pattern = r'^(\d+)\s+(\d+)\s+(\w+\s\w+|\w+)\s+(\w+)\s+([\dA-F]+)\s+([\da-fx]+)\s+(\([\da-f]+\))?\s+(\d*)\s+\(([\d,\s]+)\)$'
 
@@ -14,7 +14,6 @@ def read_from_file(path: str):
 
     with open(path, 'r') as f:
         lines = [line.strip() for line in f if line.strip()]
-        print(f'Read the lines')
         for line in lines:
             row_list.append(line)
     return pd.DataFrame(row_list)
@@ -36,14 +35,11 @@ def read_line(line):
     else:
         raise RuntimeError(f'unexpected line format in line\n{line}')
 
-
-# I don't claim this is efficient, I leave that to the algorithmics people ;)
 def path_exists(hb_edges: set[tuple[int, int]], from_node: int, to_node: int) -> bool:
     lookup_table = defaultdict(set)
     for (u, v) in hb_edges:
         lookup_table[u].add(v)
     visited = set()
-
 
     search_queue = queue.Queue()
     search_queue.put(from_node)
@@ -56,10 +52,6 @@ def path_exists(hb_edges: set[tuple[int, int]], from_node: int, to_node: int) ->
             if possible_node not in visited:
                 search_queue.put(possible_node)
     return False
-
-
-
-    return dfs(from_node)
 
 def get_pos(data, node_id: int) -> tuple[int, int]:
     return (node_id, data[data['#'] == node_id]['thread'].iloc[0])
@@ -99,15 +91,12 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
         if not data[data['#'] == n].empty else "#808080"  # Default gray for missing nodes
         for n in G.nodes
     ]
-    # Giant mess with the types, oops
-    # print(f'Nodes: {G.nodes(data=True)}')
     pos = {}
     for i in G.nodes:
         try:
             pos[i] = get_pos(data, i)
-        except Exception as e:
+        except Exception:
             pos[i] = (0, 0)
-
 
     colors = [G[u][v]['color'] for u, v in G.edges]
     nx.draw_networkx(G, pos, edge_color=colors, node_color=node_colors[:len(pos)])
@@ -116,18 +105,17 @@ def create_graph(data, rf_edges, hb_edges, swa_relation, to = None, fr = None, d
     if draw_graph:
         plt.show()
 
-
-
-def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, int]]:
+def find_data_race(fileName: str, 
+                   draw_graph: bool = False, 
+                   find_all_races: bool = False # Return after the first race is found or find all races?
+                   ) -> list[tuple[int, int]]:
 
     def handle_read_acq(node_id, mem_loc, thread_id):
         start_node = latest_release_write[mem_loc]
         acquire_to_release[node_id] = start_node
         if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
             sw_relations.add((start_node, node_id)) # add sw edge as release/acquire synchronization case 1
-    # print(f'Finding the data race')
     raw_lines = read_from_file(fileName)
-    # print(f'Read the file')
 
     node_to_thread = dict()
     last_seen_thread = dict()  # thread ID to last seen instruction ID
@@ -173,7 +161,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                     # If this is not the starting node, and the starting thread was not created right before,
                     # then we atm have no reliable way of finding the swa relation. I hope this will never occur.
                     raise Exception('Could not find thread creation')
-            
+
             case 'thread join': # Thread finished also get handled here, but is delayed till we find a thread join
 
                 # Idea: Search backwards for the thread finish in the correct thread
@@ -184,15 +172,13 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 sw_relations.add((thread_finish_node, node_id)) # adding an asw relation
 
                 pass
-            
+
             case 'atomic read':
                 node_from = int(row['RF'])
                 rf_relations.add((node_from, node_id))  # Created an RF edge
-                if node_id == 8:
-                    print(row['RF'], latest_release_write[mem_loc])
                 if row['MO'] in ['acquire', 'seq_cst'] and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
                     handle_read_acq(node_id, mem_loc, thread_id)
-                    
+
             case 'atomic write':
                 node_write.add(node_id)
                 if row['MO'] in ['release', 'seq_cst']:
@@ -229,7 +215,7 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                                                    (access_same_loc['Action type'] == 'atomic read') |
                                                     (access_same_loc['Action type'] == 'atomic rmw')]
                 search_for_races(hb_relations, data_races, node_id, writes_same_loc)
-                if len(data_races) > 0:
+                if not find_all_races and len(data_races) > 0:
                     return data_races
             case 'atomic read':
                 # Find write-write data races
@@ -237,12 +223,11 @@ def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, i
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic rmw')]
                 search_for_races(hb_relations, data_races, node_id, writes_same_loc)
-                if len(data_races) > 0:
+                if not find_all_races and len(data_races) > 0:
                     return data_races
             case _: pass
-        # create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=True)
-    print("SWS:", sw_relations)
-    print("HBS:", hb_relations)
+    if draw_graph:
+        create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=draw_graph)
     return data_races
 
 def search_for_races(hb_relations, data_races, node_id, writes_same_loc):
