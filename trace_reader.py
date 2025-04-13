@@ -110,7 +110,15 @@ def find_data_race(fileName: str,
                    find_all_races: bool = False # Return after the first race is found or find all races?
                    ) -> list[tuple[int, int]]:
 
-    def handle_read_acq(node_id, mem_loc, thread_id):
+def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, int]]:
+
+    def handle_read_acq(node_id, mem_loc, thread_id, node_from):
+        for (start_node, sequence) in ongoing_release_sequences.items():
+            if node_from in sequence:
+                acquire_to_release[node_id] = start_node
+                if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
+                    sw_relations.add((start_node, node_id))
+        return
         start_node = latest_release_write[mem_loc]
         acquire_to_release[node_id] = start_node
         if start_node not in node_to_thread.keys() or thread_id != node_to_thread[start_node]:
@@ -124,6 +132,7 @@ def find_data_race(fileName: str,
     acquire_to_release: dict[int, int] = dict() # from acquire to release according to release sequence
     # {node - sequqnce} map with sequences that are not complete or broken yet
     not_ordered_memory_locations = set()  # relaxed
+    ongoing_release_sequences: dict[int, list[int]] = dict()
     node_write = set()
     sb_relations: set[tuple[int, int]] = set()
     rf_relations: set[tuple[int, int]] = set()
@@ -177,28 +186,36 @@ def find_data_race(fileName: str,
                 node_from = int(row['RF'])
                 rf_relations.add((node_from, node_id))  # Created an RF edge
                 if row['MO'] in ['acquire', 'seq_cst'] and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
-                    handle_read_acq(node_id, mem_loc, thread_id)
-
+                    handle_read_acq(node_id, mem_loc, thread_id, node_from)
+                    
             case 'atomic write':
                 node_write.add(node_id)
                 if row['MO'] in ['release', 'seq_cst']:
                         latest_release_write[mem_loc] = node_id
+                        ongoing_release_sequences[node_id] = [node_id]
                 elif mem_loc in latest_release_write:
                     # any write from the same thread continues release sequence
                     start_node = latest_release_write[mem_loc]
-                    if start_node != 0:
-                        del latest_release_write[mem_loc]
+                    if start_node != 0 and node_to_thread[start_node] == thread_id:
+                        # here assuming that another release from the same thread will be a part of ongoing sequence
+                        ongoing_release_sequences[start_node].append(node_id)
+                    else:
+                        if start_node != 0:
+                            del ongoing_release_sequences[start_node]
+                            del latest_release_write[mem_loc]
+
 
             case 'atomic rmw':
                 node_from = int(row['RF'])
                 if row['MO'] == 'seq_cst' and mem_loc in latest_release_write.keys() and int(row['RF']) == latest_release_write[mem_loc]:
-                    handle_read_acq(node_id, mem_loc, thread_id)
+                    handle_read_acq(node_id, mem_loc, thread_id, node_from)
                 if mem_loc in latest_release_write:
                     start_node = latest_release_write[mem_loc]
                 node_write.add(node_id)
                 rf_relations.add((node_from, node_id))
                 if row['MO'] == 'seq_cst':
                     latest_release_write[mem_loc] = node_id
+                    ongoing_release_sequences[node_id] = [node_id]
 
             case _:
                 pass
