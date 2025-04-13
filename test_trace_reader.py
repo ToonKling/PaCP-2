@@ -62,8 +62,8 @@ class TestFindDataRace(unittest.TestCase):
         end_time = time.time()
         print("Program 5. 2 time: ", end_time - start_time)
 
-        # self.assertIn((9, 22), result1)
-        # self.assertIn((9, 12), result2)
+        self.assertIn((9, 12), result1)
+        self.assertIn((9, 10), result2)
 
     # Program 6 from overleaf
     def test_program6(self):
