@@ -3,6 +3,7 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 import queue
+import argparse
 
 from collections import defaultdict
 
@@ -253,5 +254,11 @@ def search_for_races(hb_relations, data_races, node_id, writes_same_loc):
             return
 
 if __name__ == "__main__":
-    races = find_data_race('./races_traces/loops2.txt', draw_graph=True)
+    parser = argparse.ArgumentParser(description="Find data races in a trace file.")
+    parser.add_argument("path", type=str, help="Path to the trace file.")
+    parser.add_argument("--find_all", action="store_true", help="Find all races instead of stopping at the first.")
+
+    args = parser.parse_args()
+
+    races = find_data_race(args.path, False, find_all_races=args.find_all)
     print(f'Found races: {races}')
