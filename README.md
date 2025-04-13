@@ -14,7 +14,7 @@ To run evaluate one file with traces, use
 
 or
 
-> python3 ./races_traces/barrier1.txt --find-all --draw-graph
+> python3 ./trace_reader.py ./races_traces/barrier1.txt --find-all --draw-graph
 
 If the optional argument --find-all is not supplied, the algorithm will return only the first Datarace.
 
