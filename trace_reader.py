@@ -109,9 +109,7 @@ def find_data_race(fileName: str,
                    draw_graph: bool = False, 
                    find_all_races: bool = False # Return after the first race is found or find all races?
                    ) -> list[tuple[int, int]]:
-
-def find_data_race(fileName: str, draw_graph: bool = False) -> list[tuple[int, int]]:
-
+    
     def handle_read_acq(node_id, mem_loc, thread_id, node_from):
         for (start_node, sequence) in ongoing_release_sequences.items():
             if node_from in sequence:
