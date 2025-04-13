@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import regex as re
 import pandas as pd
 import networkx as nx
@@ -232,14 +234,18 @@ def find_data_race(fileName: str,
                                                     (access_same_loc['Action type'] == 'atomic rmw')]
                 search_for_races(hb_relations, data_races, node_id, writes_same_loc)
                 if not find_all_races and len(data_races) > 0:
+                    if draw_graph:
+                        create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=draw_graph)
                     return data_races
             case 'atomic read':
-                # Find write-write data races
+                # Find write-read data races
                 operations_before = data[data['#'] <= node_id]
                 access_same_loc = operations_before[operations_before['Location'] == mem_loc]
                 writes_same_loc = access_same_loc[(access_same_loc['Action type'] == 'atomic write') | (access_same_loc['Action type'] == 'atomic rmw')]
                 search_for_races(hb_relations, data_races, node_id, writes_same_loc)
                 if not find_all_races and len(data_races) > 0:
+                    if draw_graph:
+                        create_graph(data, rf_edges=rf_relations, hb_edges=hb_relations, swa_relation=sw_relations, draw_graph=draw_graph)
                     return data_races
             case _: pass
     if draw_graph:
@@ -256,9 +262,10 @@ def search_for_races(hb_relations, data_races, node_id, writes_same_loc):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find data races in a trace file.")
     parser.add_argument("path", type=str, help="Path to the trace file.")
-    parser.add_argument("--find_all", action="store_true", help="Find all races instead of stopping at the first.")
+    parser.add_argument("--find-all", action="store_true", help="Find all races instead of stopping at the first.")
+    parser.add_argument("--draw-graph", action="store_true", help="Draw the graph after finding all races.")
 
     args = parser.parse_args()
 
-    races = find_data_race(args.path, False, find_all_races=args.find_all)
+    races = find_data_race(args.path, draw_graph=args.draw_graph, find_all_races=args.find_all)
     print(f'Found races: {races}')
